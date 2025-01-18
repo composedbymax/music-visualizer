@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dynamic Music Visualizer</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            background: #1a1a1a;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        canvas {
+            width: 100%;
+            height: 600px;
+            background: #000;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .control-group {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin: 5px 0;
+            width: 100%;
+        }
+
+        .btn:hover {
+            background: #45a049;
+        }
+
+        .btn:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+
+        select, input[type="color"] {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border: 1px solid #444;
+            background: #333;
+            color: white;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-label {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #2196F3;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px 0;
+            width: calc(100% - 40px);
+            text-align: center;
+        }
+
+        .file-label:hover {
+            background: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dynamic Music Visualizer</h1>
+        <div class="controls">
+            <div class="control-group">
+                <label class="file-label" for="audioInput">Choose Audio File
+                    <input type="file" id="audioInput" class="file-input" accept="audio/*">
+                </label>
+                <button id="playButton" class="btn" disabled>Play</button>
+                <button id="pauseButton" class="btn" disabled>Pause</button>
+            </div>
+            <div class="control-group">
+                <label>Visualization Style</label>
+                <select id="visualizerType">
+                    <option value="particles">Particles</option>
+                    <option value="spiral">Spiral</option>
+                    <option value="bars">Dynamic Bars</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Primary Color</label>
+                <input type="color" id="primaryColor" value="#00ff00">
+                <label>Secondary Color</label>
+                <input type="color" id="secondaryColor" value="#ff00ff">
+            </div>
+            <div class="control-group">
+                <button id="startRecording" class="btn" disabled>Start Recording</button>
+                <button id="stopRecording" class="btn" disabled>Stop Recording</button>
+            </div>
+        </div>
+        <canvas id="visualizer"></canvas>
+    </div>
+
+    <script>
+        // Initialize DOM elements
+        const canvas = document.getElementById('visualizer');
+        const ctx = canvas.getContext('2d');
+        const primaryColorInput = document.getElementById('primaryColor');
+        const secondaryColorInput = document.getElementById('secondaryColor');
+        const visualizerTypeSelect = document.getElementById('visualizerType');
+        
+        // Audio elements
+        let audioContext;
+        let analyser;
+        let source;
+        const audio = new Audio();
+        
+        // Animation variables
+        let animationId;
+        let lastDrawTime = 0;
+        const FRAME_RATE = 1000 / 60;
+        
+        // State
+        let isPlaying = false;
+        let isRecording = false;
+        let mediaRecorder;
+        let chunks = [];
+        let particles = [];
+        let currentVisualizerType = 'particles';
+
+        // Set canvas size
+        function setupCanvas() {
+            // Set actual canvas size
+            canvas.width = 1200;
+            canvas.height = 600;
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.size = Math.random() * 5 + 2;
+                this.speedX = Math.random() * 3 - 1.5;
+                this.speedY = Math.random() * 3 - 1.5;
+                this.life = 1;
+            }
+
+            update(intensity) {
+                this.x += this.speedX * intensity;
+                this.y += this.speedY * intensity;
+                this.life -= 0.01;
+                this.size = Math.max(0, this.size - 0.1);
+            }
+
+            draw(ctx) {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+            }
+        }
+
+        function createParticles(x, y, color, count) {
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        function drawParticleVisualization(dataArray, bufferLength) {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            const intensity = dataArray.reduce((a, b) => a + b) / bufferLength;
+            if (intensity > 100) {
+                createParticles(centerX, centerY, primaryColorInput.value, 5);
+                createParticles(centerX, centerY, secondaryColorInput.value, 5);
+            }
+
+            particles = particles.filter(particle => particle.life > 0);
+            particles.forEach(particle => {
+                particle.update(intensity / 100);
+                particle.draw(ctx);
+            });
+        }
+
+        function drawSpiralVisualization(dataArray, bufferLength) {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const maxRadius = Math.min(centerX, centerY) * 0.8;
+            
+            ctx.beginPath();
+            ctx.strokeStyle = primaryColorInput.value;
+            ctx.lineWidth = 2;
+            
+            for (let i = 0; i < bufferLength; i++) {
+                const amplitude = dataArray[i] / 255;
+                const angle = (i / bufferLength) * Math.PI * 20;
+                const radius = (angle / (Math.PI * 2)) * maxRadius * amplitude;
+                
+                const x = centerX + Math.cos(angle) * radius;
+                const y = centerY + Math.sin(angle) * radius;
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            
+            ctx.stroke();
+        }
+
+        function drawBarsVisualization(dataArray, bufferLength) {
+            const barWidth = canvas.width / bufferLength;
+            
+            for (let i = 0; i < bufferLength; i++) {
+                const percent = dataArray[i] / 255;
+                const height = canvas.height * percent;
+                const gradient = ctx.createLinearGradient(0, canvas.height - height, 0, canvas.height);
+                
+                gradient.addColorStop(0, primaryColorInput.value);
+                gradient.addColorStop(1, secondaryColorInput.value);
+                
+                ctx.fillStyle = gradient;
+                ctx.fillRect(i * barWidth, canvas.height - height, barWidth - 2, height);
+            }
+        }
+
+        function draw(timestamp) {
+            if (!analyser) return;
+            
+            if (timestamp - lastDrawTime < FRAME_RATE) {
+                animationId = requestAnimationFrame(draw);
+                return;
+            }
+            
+            lastDrawTime = timestamp;
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteFrequencyData(dataArray);
+
+            // Clear canvas with fade effect
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            switch (currentVisualizerType) {
+                case 'particles':
+                    drawParticleVisualization(dataArray, bufferLength);
+                    break;
+                case 'spiral':
+                    drawSpiralVisualization(dataArray, bufferLength);
+                    break;
+                case 'bars':
+                    drawBarsVisualization(dataArray, bufferLength);
+                    break;
+            }
+
+            if (isPlaying) {
+                animationId = requestAnimationFrame(draw);
+            }
+        }
+
+        async function setupAudioContext() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            source = audioContext.createMediaElementSource(audio);
+            source.connect(analyser);
+            analyser.connect(audioContext.destination);
+        }
+
+        // Event Listeners
+        document.getElementById('audioInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    audio.src = e.target.result;
+                    await setupAudioContext();
+                    document.getElementById('playButton').disabled = false;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        document.getElementById('playButton').addEventListener('click', () => {
+            if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            audio.play();
+            isPlaying = true;
+            document.getElementById('playButton').disabled = true;
+            document.getElementById('pauseButton').disabled = false;
+            document.getElementById('startRecording').disabled = false;
+            requestAnimationFrame(draw);
+        });
+
+        document.getElementById('pauseButton').addEventListener('click', () => {
+            audio.pause();
+            isPlaying = false;
+            document.getElementById('playButton').disabled = false;
+            document.getElementById('pauseButton').disabled = true;
+            cancelAnimationFrame(animationId);
+        });
+
+        visualizerTypeSelect.addEventListener('change', (e) => {
+            currentVisualizerType = e.target.value;
+            particles = [];
+            if (isPlaying) {
+                cancelAnimationFrame(animationId);
+                requestAnimationFrame(draw);
+            }
+        });
+
+        document.getElementById('startRecording').addEventListener('click', async () => {
+            chunks = [];
+            const stream = canvas.captureStream();
+            const audioStream = audio.captureStream();
+            const tracks = [...stream.getTracks(), ...audioStream.getTracks()];
+            const combinedStream = new MediaStream(tracks);
+            
+            mediaRecorder = new MediaRecorder(combinedStream, {
+                mimeType: 'video/webm;codecs=vp8,opus',
+                videoBitsPerSecond: 8000000
+            });
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) chunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'visualization.webm';
+                a.click();
+                URL.revokeObjectURL(url);
+            };
+
+            mediaRecorder.start();
+            isRecording = true;
+            document.getElementById('startRecording').disabled = true;
+            document.getElementById('stopRecording').disabled = false;
+        });
+
+        document.getElementById('stopRecording').addEventListener('click', () => {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+                isRecording = false;
+                document.getElementById('startRecording').disabled = false;
+                document.getElementById('stopRecording').disabled = true;
+            }
+        });
+
+        // Initial setup
+        setupCanvas();
+    </script>
+</body>
+</html>
