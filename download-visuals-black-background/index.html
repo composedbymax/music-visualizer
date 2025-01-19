@@ -260,11 +260,15 @@
                 this.ctx = this.canvas.getContext('2d');
                 this.overlay = document.getElementById('overlay');
                 this.overlayCtx = this.overlay.getContext('2d');
-                this.audio = new Audio();
+                this.audio = null;
                 this.isPlaying = false;
                 this.isRecording = false;
                 this.particles = [];
                 this.terrain = [];
+                this.audioContext = null;
+                this.analyser = null;
+                this.gainNode = null;
+                this.source = null;
                 this.setupEventListeners();
                 this.setupCanvas();
                 this.initializeParticles();
@@ -286,13 +290,47 @@
                 updateCanvasSize();
                 window.addEventListener('resize', updateCanvasSize);
             }
+            async cleanupAudio() {
+                if (this.audio) {
+                    this.audio.pause();
+                    this.audio.src = '';
+                    this.audio.load();
+                }
+                if (this.source) {
+                    this.source.disconnect();
+                }
+                if (this.analyser) {
+                    this.analyser.disconnect();
+                }
+                if (this.gainNode) {
+                    this.gainNode.disconnect();
+                }
+                if (this.audioContext) {
+                    await this.audioContext.close();
+                }
+                this.audio = null;
+                this.source = null;
+                this.analyser = null;
+                this.gainNode = null;
+                this.audioContext = null;
+            }
             async setupAudio(file) {
+                await this.cleanupAudio();
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 this.analyser = this.audioContext.createAnalyser();
                 this.analyser.fftSize = 2048;
-                const source = this.audioContext.createMediaElementSource(this.audio);
                 this.gainNode = this.audioContext.createGain();
-                source.connect(this.analyser);
+                this.audio = new Audio();
+                const volumeControl = document.getElementById('volumeControl');
+                if (volumeControl) {
+                    this.gainNode.gain.value = volumeControl.value;
+                }
+                const smoothingControl = document.getElementById('smoothing');
+                if (smoothingControl) {
+                    this.analyser.smoothingTimeConstant = parseFloat(smoothingControl.value);
+                }
+                this.source = this.audioContext.createMediaElementSource(this.audio);
+                this.source.connect(this.analyser);
                 this.analyser.connect(this.gainNode);
                 this.gainNode.connect(this.audioContext.destination);
                 this.audio.src = URL.createObjectURL(file);
@@ -550,15 +588,17 @@
                         await this.setupAudio(file);
                     }
                 });
-                document.getElementById('playButton').addEventListener('click', () => {
+                document.getElementById('playButton').addEventListener('click', async () => {
                     if (this.audioContext && this.audioContext.state === 'suspended') {
-                        this.audioContext.resume();
+                        await this.audioContext.resume();
                     }
-                    this.audio.play();
-                    this.isPlaying = true;
-                    document.getElementById('playButton').disabled = true;
-                    document.getElementById('pauseButton').disabled = false;
-                    this.draw();
+                    if (this.audio) {
+                        await this.audio.play();
+                        this.isPlaying = true;
+                        document.getElementById('playButton').disabled = true;
+                        document.getElementById('pauseButton').disabled = false;
+                        this.draw();
+                    }
                 });
                 document.getElementById('pauseButton').addEventListener('click', () => {
                     this.audio.pause();
