@@ -276,6 +276,8 @@
                 this.fpsCounter = new FPSCounter();
                 this.mediaRecorder = null;
                 this.recordingChunks = [];
+                this.smoothedData = new Float32Array(1024); // For secondary smoothing
+                this.smoothingFactor = 0.5;
             }
             setupCanvas() {
                 const updateCanvasSize = () => {
@@ -366,6 +368,10 @@
                 const bufferLength = this.analyser.frequencyBinCount;
                 const dataArray = new Uint8Array(bufferLength);
                 this.analyser.getByteFrequencyData(dataArray);
+                for (let i = 0; i < bufferLength; i++) {
+                    this.smoothedData[i] = this.smoothedData[i] * this.smoothingFactor + 
+                                        dataArray[i] * (1 - this.smoothingFactor);
+                }
                 this.ctx.fillStyle = document.getElementById('backgroundColor').value + '20';
                 this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
                 const visualizerType = document.getElementById('visualizerType').value;
@@ -614,6 +620,8 @@
                 document.getElementById('smoothing').addEventListener('input', (e) => {
                     if (this.analyser) {
                         this.analyser.smoothingTimeConstant = parseFloat(e.target.value);
+                        // Update secondary smoothing factor
+                        this.smoothingFactor = 0.5 + parseFloat(e.target.value) * 0.5;
                     }
                 });
                 document.querySelectorAll('.preset-btn').forEach(btn => {
@@ -627,9 +635,9 @@
                     this.recordingChunks = [];
                     const quality = document.getElementById('videoQuality').value;
                     const videoBitsPerSecond = {
-                        'high': 8000000,    // 4K
-                        'medium': 4000000,  // 1080p
-                        'low': 2500000      // 720p
+                        'high': 16000000,    // 4K
+                        'medium': 8000000,  // 1080p
+                        'low': 5000000      // 720p
                     }[quality];
                     try {
                         const canvasStream = this.canvas.captureStream();
@@ -744,6 +752,6 @@
                 '0, 0, 0';
         }
         const visualizer = new AudioVisualizer();
-</script>
+    </script>
 </body>
 </html>
