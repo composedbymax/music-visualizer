@@ -39,6 +39,9 @@
       <input type="file" id="audioUpload" accept="audio/*" />
       <button id="startRecording">Start Recording</button>
       <button id="stopRecording" disabled>Stop Recording</button>
+      <br />
+      <label for="userColor">User Color:</label>
+      <input type="color" id="userColor" value="#ff0077" />
       <div style="margin-top: 10px;">Use ← and → keys to switch animations</div>
     </div>
     <script>
@@ -67,85 +70,51 @@
           gl_Position = vec4(aPosition, 0.0, 1.0);
         }
       `;
-      const fsSource1 = `
+      const fsSourceWaves = `
         precision mediump float;
         uniform float uTime;
         uniform vec2 uResolution;
         uniform float uAudioLevel;
-        
-        float hash(vec2 p){
-          return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453123);
-        }
-        float noise(vec2 p){
-          vec2 i = floor(p);
-          vec2 f = fract(p);
-          float a = hash(i);
-          float b = hash(i + vec2(1.0, 0.0));
-          float c = hash(i + vec2(0.0, 1.0));
-          float d = hash(i + vec2(1.0, 1.0));
-          vec2 u = f*f*(3.0-2.0*f);
-          return mix(a, b, u.x) + (c - a)*u.y*(1.0-u.x) + (d - b)*u.x*u.y;
-        }
-        float fbm(vec2 p){
-          float total = 0.0;
-          float amplitude = 0.5;
-          for(int i=0; i<6; i++){
-            total += noise(p) * amplitude;
-            p *= 2.0;
-            amplitude *= 0.5;
-          }
-          return total;
-        }
-        void main(void){
-          vec2 uv = gl_FragCoord.xy / uResolution.xy;
-          vec2 p = uv - 0.5;
-          p.x *= uResolution.x / uResolution.y;
-          float angle = uTime * 0.3 + uAudioLevel * 3.0;
-          float s = sin(angle);
-          float c = cos(angle);
-          mat2 rot = mat2(c, -s, s, c);
-          p = rot * p;
-          float n = fbm(p * 3.0 + uTime * 0.5);
-          vec3 colorA = vec3(0.1, 0.2, 0.5);
-          vec3 colorB = vec3(1.0, 0.5, 0.2);
-          vec3 col = mix(colorA, colorB, n);
-          col += uAudioLevel * 0.5;
-          gl_FragColor = vec4(pow(col, vec3(0.4545)), 1.0);
-        }
-      `;
-      const fsSource2 = `
-        precision mediump float;
-        uniform float uTime;
-        uniform vec2 uResolution;
-        uniform float uAudioLevel;
+        uniform vec3 uUserColor;
         void main(void) {
           vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
           float angle = atan(uv.y, uv.x);
           float radius = length(uv);
           float wave = sin(10.0 * radius - uTime * 2.0 + uAudioLevel * 5.0) + sin(5.0 * angle + uTime);
-          vec3 col = vec3(
-            0.5 + 0.5 * cos(uTime + wave + 0.0),
-            0.5 + 0.5 * cos(uTime + wave + 2.0),
-            0.5 + 0.5 * cos(uTime + wave + 4.0)
-          );
+          vec3 base = vec3(0.5, 0.5, 0.5);
+          vec3 col = mix(base, uUserColor, 0.5 + 0.5 * sin(uTime + wave));
           gl_FragColor = vec4(col, 1.0);
         }
       `;
-      const fsSource3 = `
+      const fsSourceTunnel = `
         precision mediump float;
         uniform float uTime;
         uniform vec2 uResolution;
         uniform float uAudioLevel;
+        uniform vec3 uUserColor;
         void main(void) {
           vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
           float angle = atan(uv.y, uv.x);
           float radius = length(uv);
           float stripes = sin(10.0 * radius - uTime * 5.0 + uAudioLevel * 10.0);
-          vec3 col = vec3(
-            0.5 + 0.5 * cos(uTime + stripes + angle),
-            0.5 + 0.5 * sin(uTime + stripes + angle),
-            0.5 + 0.5 * cos(uTime + stripes)
-          );
+          vec3 base = vec3(0.3, 0.3, 0.3);
+          vec3 col = mix(base, uUserColor, 0.5 + 0.5 * cos(uTime + stripes + angle));
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `;
+      const fsSourceSpectrum = `
+        precision mediump float;
+        uniform float uTime;
+        uniform vec2 uResolution;
+        uniform float uAudioLevel;
+        uniform vec3 uUserColor;
+        void main(void) {
+          vec2 uv = gl_FragCoord.xy / uResolution.xy;
+          float barWidth = 0.05;
+          float index = floor(uv.x / barWidth);
+          float modTime = mod(uTime + index, 1.0);
+          float bar = step(0.5, fract(uv.y * 10.0 + modTime + uAudioLevel * 5.0));
+          vec3 col = mix(vec3(0.0), uUserColor, bar);
           gl_FragColor = vec4(col, 1.0);
         }
       `;
@@ -175,18 +144,19 @@
         return program;
       }
       const animations = [];
-      const fsSources = [fsSource1, fsSource2, fsSource3];
-      const modeNames = ["Noise", "Waves", "Tunnel"];
+      const fsSources = [fsSourceWaves, fsSourceTunnel, fsSourceSpectrum];
+      const modeNames = ["Waves", "Tunnel", "Spectrum"];
       for (let i = 0; i < fsSources.length; i++) {
         const program = createProgram(fsSources[i]);
         gl.useProgram(program);
         const uTime = gl.getUniformLocation(program, "uTime");
         const uResolution = gl.getUniformLocation(program, "uResolution");
         const uAudioLevel = gl.getUniformLocation(program, "uAudioLevel");
+        const uUserColor = gl.getUniformLocation(program, "uUserColor");
         animations.push({
           name: modeNames[i],
           program,
-          uniforms: { uTime, uResolution, uAudioLevel },
+          uniforms: { uTime, uResolution, uAudioLevel, uUserColor },
         });
       }
       let currentAnimationIndex = 0;
@@ -216,6 +186,12 @@
           updateModeDisplay();
         }
       });
+      function hexToRgb(hex) {
+        let r = parseInt(hex.slice(1, 3), 16) / 255;
+        let g = parseInt(hex.slice(3, 5), 16) / 255;
+        let b = parseInt(hex.slice(5, 7), 16) / 255;
+        return [r, g, b];
+      }
       let audioBuffer = null;
       let analyser = null;
       let dataArray = null;
@@ -252,6 +228,11 @@
           audioLevel = sum / dataArray.length / 255;
         }
         gl.uniform1f(anim.uniforms.uAudioLevel, audioLevel);
+        const userColorHex = document.getElementById("userColor").value;
+        const [r, g, b] = hexToRgb(userColorHex);
+        if (anim.uniforms.uUserColor)
+          gl.uniform3f(anim.uniforms.uUserColor, r, g, b);
+        
         gl.drawArrays(gl.TRIANGLES, 0, 6);
         requestAnimationFrame(render);
       }
