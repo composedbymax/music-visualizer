@@ -17,8 +17,12 @@
         top: 10px;
         left: 10px;
         z-index: 100;
+        background: rgba(255, 255, 255, 0.8);
+        padding: 10px;
+        border-radius: 4px;
       }
-      button {
+      button,
+      input {
         margin-right: 5px;
       }
     </style>
@@ -26,6 +30,7 @@
   <body>
     <canvas id="canvas"></canvas>
     <div id="controls">
+      <input type="file" id="audioUpload" accept="audio/*" />
       <button id="startRecording">Start Recording</button>
       <button id="stopRecording" disabled>Stop Recording</button>
     </div>
@@ -44,7 +49,7 @@
       window.addEventListener("resize", resizeCanvas);
       resizeCanvas();
       const vsSource = ` attribute vec2 aPosition;void main(){gl_Position=vec4(aPosition,0.0,1.0);}`;
-      const fsSource = ` precision mediump float;uniform float uTime;uniform vec2 uResolution;void main(void){vec2 uv=gl_FragCoord.xy/uResolution.xy;vec3 color1=0.5+0.5*cos(uTime+uv.xyx+vec3(0.0,2.0,4.0));float dist=distance(uv,vec2(0.5));vec3 color2=mix(vec3(1.0,0.2,0.3),vec3(0.2,0.3,1.0),smoothstep(0.3,0.6,dist));float blend=0.5+0.5*sin(uTime*0.5);vec3 finalColor=mix(color1,color2,blend);gl_FragColor=vec4(finalColor,1.0);}`;
+      const fsSource = ` precision mediump float;uniform float uTime;uniform vec2 uResolution;uniform float uAudioLevel;void main(void){vec2 uv=gl_FragCoord.xy/uResolution.xy;vec3 color1=0.5+0.5*cos(uTime+uv.xyx+vec3(0.0,2.0,4.0));float dist=distance(uv,vec2(0.5));vec3 color2=mix(vec3(1.0,0.2,0.3),vec3(0.2,0.3,1.0),smoothstep(0.3,0.6,dist));float blend=0.5+0.5*sin(uTime*0.5);blend*=(0.5+uAudioLevel);vec3 finalColor=mix(color1,color2,blend);gl_FragColor=vec4(finalColor,1.0);}`;
       function compileShader(source, type) {
         const shader = gl.createShader(type);
         gl.shaderSource(shader, source);
@@ -79,6 +84,24 @@
       gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
       const uTimeLocation = gl.getUniformLocation(program, "uTime");
       const uResolutionLocation = gl.getUniformLocation(program, "uResolution");
+      const uAudioLevelLocation = gl.getUniformLocation(program, "uAudioLevel");
+      let audioBuffer = null;
+      let analyser = null;
+      let dataArray = null;
+      let sourceNode = null;
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      const audioCtx = new AudioContext();
+      const dest = audioCtx.createMediaStreamDestination();
+      document
+        .getElementById("audioUpload")
+        .addEventListener("change", async (e) => {
+          const file = e.target.files[0];
+          if (file) {
+            const arrayBuffer = await file.arrayBuffer();
+            audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+            console.log("Audio file loaded.");
+          }
+        });
       let startTime = null;
       function render(timestamp) {
         if (!startTime) startTime = timestamp;
@@ -87,21 +110,20 @@
         gl.clear(gl.COLOR_BUFFER_BIT);
         gl.uniform1f(uTimeLocation, elapsed);
         gl.uniform2f(uResolutionLocation, canvas.width, canvas.height);
+        let audioLevel = 0.0;
+        if (analyser && dataArray) {
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i];
+          }
+          audioLevel = sum / dataArray.length / 255;
+        }
+        gl.uniform1f(uAudioLevelLocation, audioLevel);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
         requestAnimationFrame(render);
       }
       requestAnimationFrame(render);
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      const audioCtx = new AudioContext();
-      const oscillator = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.value = 440;
-      oscillator.connect(gainNode);
-      const dest = audioCtx.createMediaStreamDestination();
-      gainNode.connect(dest);
-      gainNode.connect(audioCtx.destination);
-      oscillator.start();
       let mediaRecorder;
       let chunks = [];
       const videoBitrate = 2500000;
@@ -110,6 +132,24 @@
         .addEventListener("click", async () => {
           await audioCtx.resume();
           chunks = [];
+          if (audioBuffer) {
+            if (sourceNode) {
+              try {
+                sourceNode.stop();
+              } catch (e) {}
+            }
+            sourceNode = audioCtx.createBufferSource();
+            sourceNode.buffer = audioBuffer;
+            const gainNode = audioCtx.createGain();
+            sourceNode.connect(gainNode);
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 256;
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
+            gainNode.connect(analyser);
+            gainNode.connect(audioCtx.destination);
+            gainNode.connect(dest);
+            sourceNode.start(0);
+          }
           const canvasStream = canvas.captureStream(60);
           const audioStream = dest.stream;
           const tracks = [
@@ -145,6 +185,11 @@
         mediaRecorder.stop();
         document.getElementById("startRecording").disabled = false;
         document.getElementById("stopRecording").disabled = true;
+        if (sourceNode) {
+          try {
+            sourceNode.stop();
+          } catch (e) {}
+        }
       });
     </script>
   </body>
