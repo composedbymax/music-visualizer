@@ -43,6 +43,10 @@
       <label for="userColor">User Color:</label>
       <input type="color" id="userColor" value="#ff0077" />
       <div style="margin-top: 10px;">Use ← and → keys to switch animations</div>
+      <label for="canvasWidth">Canvas Width:</label>
+      <input type="number" id="canvasWidth" value="800" min="100" max="4000" />
+      <label for="canvasHeight">Canvas Height:</label>
+      <input type="number" id="canvasHeight" value="600" min="100" max="4000" />
     </div>
     <script>
       const canvas = document.getElementById("canvas");
@@ -55,13 +59,19 @@
         throw new Error("WebGL not supported");
       }
       function resizeCanvas() {
+        const widthInput = document.getElementById("canvasWidth").value;
+        const heightInput = document.getElementById("canvasHeight").value;
+        const userWidth = parseInt(widthInput, 10) || window.innerWidth;
+        const userHeight = parseInt(heightInput, 10) || window.innerHeight;
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = window.innerWidth * dpr;
-        canvas.height = window.innerHeight * dpr;
-        canvas.style.width = window.innerWidth + "px";
-        canvas.style.height = window.innerHeight + "px";
+        canvas.width = userWidth * dpr;
+        canvas.height = userHeight * dpr;
+        canvas.style.width = userWidth + "px";
+        canvas.style.height = userHeight + "px";
         gl.viewport(0, 0, canvas.width, canvas.height);
       }
+      document.getElementById("canvasWidth").addEventListener("input", resizeCanvas);
+      document.getElementById("canvasHeight").addEventListener("input", resizeCanvas);
       window.addEventListener("resize", resizeCanvas);
       resizeCanvas();
       const vsSource = `
