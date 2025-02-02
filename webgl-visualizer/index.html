@@ -251,534 +251,737 @@
       <button id="closePreview" style="flex:1;">✕ Close</button>
     </div>
   </div>
-  <script>
-    const canvas = document.getElementById("visualizerCanvas");
-    const gl = canvas.getContext("webgl", {
-      antialias: true,
-      preserveDrawingBuffer: true,
-    });
-    if (!gl) {
-      alert("WebGL not supported");
-      throw new Error("WebGL not supported");
+</body>
+<script>
+const canvas = document.getElementById("visualizerCanvas");
+const gl = canvas.getContext("webgl", {
+  antialias: true,
+  preserveDrawingBuffer: true,
+});
+if (!gl) {
+  alert("WebGL not supported");
+  throw new Error("WebGL not supported");
+}
+const qualitySettings = {
+  low: { videoBitsPerSecond: 5000000 },
+  medium: { videoBitsPerSecond: 10000000 },
+  high: { videoBitsPerSecond: 20000000 }
+};
+function resizeCanvas() {
+  const widthInput = document.getElementById("canvasWidth").value;
+  const heightInput = document.getElementById("canvasHeight").value;
+  const userWidth = parseInt(widthInput, 10) || window.innerWidth;
+  const userHeight = parseInt(heightInput, 10) || window.innerHeight;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = userWidth * dpr;
+  canvas.height = userHeight * dpr;
+  canvas.style.width = userWidth + "px";
+  canvas.style.height = userHeight + "px";
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+document.getElementById("canvasWidth").addEventListener("input", resizeCanvas);
+document.getElementById("canvasHeight").addEventListener("input", resizeCanvas);
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+class ShaderProgram {
+  constructor(vertexSrc, fragmentSrc) {
+    this.program = this.createProgram(vertexSrc, fragmentSrc);
+  }
+  createShader(source, type) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      const error = gl.getShaderInfoLog(shader);
+      gl.deleteShader(shader);
+      throw new Error("Shader compile error: " + error);
     }
-    const qualitySettings = {
-      low: { videoBitsPerSecond: 5000000 },
-      medium: { videoBitsPerSecond: 10000000 },
-      high: { videoBitsPerSecond: 20000000 }
+    return shader;
+  }
+  createProgram(vertexSrc, fragmentSrc) {
+    const vertexShader = this.createShader(vertexSrc, gl.VERTEX_SHADER);
+    const fragmentShader = this.createShader(fragmentSrc, gl.FRAGMENT_SHADER);
+    const program = gl.createProgram();
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      const error = gl.getProgramInfoLog(program);
+      gl.deleteProgram(program);
+      throw new Error("Program link error: " + error);
+    }
+    return program;
+  }
+  use() {
+    gl.useProgram(this.program);
+  }
+  getAttribLocation(name) {
+    return gl.getAttribLocation(this.program, name);
+  }
+  getUniformLocation(name) {
+    return gl.getUniformLocation(this.program, name);
+  }
+}
+class AnimationModule {
+  constructor(name, fragmentSrc) {
+    this.name = name;
+    this.shader = new ShaderProgram(vsSource, fragmentSrc);
+    this.uniforms = {
+      uUserColor1: gl.getUniformLocation(this.shader.program, "uUserColor1"),
+      uUserColor2: gl.getUniformLocation(this.shader.program, "uUserColor2"),
+      uTime: gl.getUniformLocation(this.shader.program, "uTime"),
+      uResolution: gl.getUniformLocation(this.shader.program, "uResolution"),
+      uAudioLevel: gl.getUniformLocation(this.shader.program, "uAudioLevel"),
     };
-    function resizeCanvas() {
-      const widthInput = document.getElementById("canvasWidth").value;
-      const heightInput = document.getElementById("canvasHeight").value;
-      const userWidth = parseInt(widthInput, 10) || window.innerWidth;
-      const userHeight = parseInt(heightInput, 10) || window.innerHeight;
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = userWidth * dpr;
-      canvas.height = userHeight * dpr;
-      canvas.style.width = userWidth + "px";
-      canvas.style.height = userHeight + "px";
-      gl.viewport(0, 0, canvas.width, canvas.height);
-    }
-    document.getElementById("canvasWidth").addEventListener("input", resizeCanvas);
-    document.getElementById("canvasHeight").addEventListener("input", resizeCanvas);
-    window.addEventListener("resize", resizeCanvas);
-    resizeCanvas();
-    class ShaderProgram {
-      constructor(vertexSrc, fragmentSrc) {
-        this.program = this.createProgram(vertexSrc, fragmentSrc);
-      }
-      createShader(source, type) {
-        const shader = gl.createShader(type);
-        gl.shaderSource(shader, source);
-        gl.compileShader(shader);
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-          const error = gl.getShaderInfoLog(shader);
-          gl.deleteShader(shader);
-          throw new Error("Shader compile error: " + error);
-        }
-        return shader;
-      }
-      createProgram(vertexSrc, fragmentSrc) {
-        const vertexShader = this.createShader(vertexSrc, gl.VERTEX_SHADER);
-        const fragmentShader = this.createShader(fragmentSrc, gl.FRAGMENT_SHADER);
-        const program = gl.createProgram();
-        gl.attachShader(program, vertexShader);
-        gl.attachShader(program, fragmentShader);
-        gl.linkProgram(program);
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-          const error = gl.getProgramInfoLog(program);
-          gl.deleteProgram(program);
-          throw new Error("Program link error: " + error);
-        }
-        return program;
-      }
-      use() {
-        gl.useProgram(this.program);
-      }
-      getAttribLocation(name) {
-        return gl.getAttribLocation(this.program, name);
-      }
-      getUniformLocation(name) {
-        return gl.getUniformLocation(this.program, name);
-      }
-    }
-    class AnimationModule {
-      constructor(name, fragmentSrc) {
-        this.name = name;
-        this.shader = new ShaderProgram(vsSource, fragmentSrc);
-        this.uniforms = {
-          uUserColor1: gl.getUniformLocation(this.shader.program, "uUserColor1"),
-          uUserColor2: gl.getUniformLocation(this.shader.program, "uUserColor2"),
-          uTime: gl.getUniformLocation(this.shader.program, "uTime"),
-          uResolution: gl.getUniformLocation(this.shader.program, "uResolution"),
-          uAudioLevel: gl.getUniformLocation(this.shader.program, "uAudioLevel"),
-        };
-      }
-      use() {
-        this.shader.use();
-      }
-    }
-    const vsSource = `
-      attribute vec2 aPosition;
-      void main(){
-        gl_Position = vec4(aPosition, 0.0, 1.0);
-      }
-    `;
-    const fsSourceWaves = `
-    precision mediump float;
-    uniform float uTime;
-    uniform vec2 uResolution;
-    uniform float uAudioLevel;
-    uniform vec3 uUserColor1;
-    uniform vec3 uUserColor2;
-    void main(void) {
-        vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
-        float angle = atan(uv.y, uv.x);
-        float radius = length(uv);
-        float wave = sin(10.0 * radius - uTime * 2.0 + uAudioLevel * 5.0) + sin(5.0 * angle + uTime);
-        vec3 col = mix(uUserColor1, uUserColor2, 0.5 + 0.5 * sin(uTime + wave));
-        gl_FragColor = vec4(col * (1.0 + radius * 0.5), 1.0);
-    }`;
-    const fsSourceTunnel = `
-    precision mediump float;
-    uniform float uTime;
-    uniform vec2 uResolution;
-    uniform float uAudioLevel;
-    uniform vec3 uUserColor1;
-    uniform vec3 uUserColor2;
-    void main(void) {
-        vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
-        float angle = atan(uv.y, uv.x);
-        float radius = length(uv);
-        float stripes = sin(10.0 * radius - uTime * 5.0 + uAudioLevel * 10.0);
-        vec3 col = mix(uUserColor1, uUserColor2, 0.5 + 0.5 * cos(uTime + stripes + angle * 2.0));
-        gl_FragColor = vec4(col * (1.0 - radius), 1.0);
-    }`;
-    const fsSourceSpectrum = `
-    precision mediump float;
-    uniform float uTime;
-    uniform vec2 uResolution;
-    uniform float uAudioLevel;
-    uniform vec3 uUserColor1;
-    uniform vec3 uUserColor2;
-    void main(void) {
-        vec2 uv = gl_FragCoord.xy / uResolution;
-        float barWidth = 0.05;
-        float index = floor(uv.x / barWidth);
-        float modTime = mod(uTime + index, 1.0);
-        float bar = step(0.5, fract(uv.y * 10.0 + modTime + uAudioLevel * 5.0));
-        vec3 col = mix(uUserColor1, uUserColor2, bar * (0.5 + 0.5 * sin(uTime)));
-        gl_FragColor = vec4(col, 1.0);
-    }`;
-    const fsSourceParticles = `
-    precision highp float;
-    uniform float uTime;
-    uniform vec2 uResolution;
-    uniform float uAudioLevel;
-    uniform vec3 uUserColor1;
-    uniform vec3 uUserColor2;
-    float random(vec2 st) {
-        return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
-    }
-    void main() {
-        vec2 uv = gl_FragCoord.xy/uResolution.xy;
-        uv.x *= uResolution.x/uResolution.y;
-        vec3 color = vec3(0.0);
-        float particleCount = 50.0 + uAudioLevel * 100.0;
-        for(float i = 0.0; i < 50.0; i++) {
-            if(i >= particleCount) break;
-            vec2 pos = vec2(
-                random(vec2(i)) + sin(uTime*0.5 + i) * 0.3,
-                fract(random(vec2(i*2.0)) + uTime*0.2 * (0.5 + uAudioLevel))
-            );
-            float dist = length(uv - pos);
-            vec3 particleColor = mix(uUserColor1, uUserColor2, fract(i/10.0));
-            color += particleColor * 0.02/(dist*15.0) * (1.0 + uAudioLevel*5.0);
-        }
-        gl_FragColor = vec4(color,1.0);
-    }`;
-    const fsSourceGrid = `
-    precision highp float;
-    uniform float uTime;
-    uniform vec2 uResolution;
-    uniform float uAudioLevel;
-    uniform vec3 uUserColor1;
-    uniform vec3 uUserColor2;
-    void main() {
-        vec2 uv = (gl_FragCoord.xy * 2.0 - uResolution.xy) / min(uResolution.x, uResolution.y);
-        uv *= 2.0 + uAudioLevel * 3.0;
-        vec2 grid = fract(uv * 2.0);
-        grid = abs(grid - 0.5);
-        float line = min(grid.x, grid.y);
-        float mask = smoothstep(0.1, 0.05, line);
-        vec3 color = mix(uUserColor1, uUserColor2, mask);
-        color *= sin(uTime + uv.x * 2.0) * 0.5 + 0.5;
-        color += pow(1.0 - line, 20.0) * uUserColor2 * (0.5 + uAudioLevel);
-        gl_FragColor = vec4(color, 1.0);
-    }`;
-    const fsSourcePlasma = `
-    precision highp float;
-    uniform float uTime;
-    uniform vec2 uResolution;
-    uniform float uAudioLevel;
-    uniform vec3 uUserColor1;
-    uniform vec3 uUserColor2;
-    void main() {
-        vec2 uv = gl_FragCoord.xy / uResolution.xy * 2.0 - 1.0;
-        uv.x *= uResolution.x / uResolution.y;
-        float t = uTime * 0.5;
-        float c = sin(t + uv.x * 5.0) + 
-                sin(t + uv.y * 3.0) + 
-                sin((t + uv.x + uv.y) * 4.0) * uAudioLevel * 2.0;
-        vec3 color = mix(uUserColor1, uUserColor2, 0.5 + 0.5 * sin(c * 3.0 + uTime)) * 
-                    (1.0 - length(uv) * 0.3) * 
+  }
+  use() {
+    this.shader.use();
+  }
+}
+const vsSource = `
+  attribute vec2 aPosition;
+  void main(){
+    gl_Position = vec4(aPosition, 0.0, 1.0);
+  }
+`;
+const fsSourceWaves = `
+precision mediump float;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform float uAudioLevel;
+uniform vec3 uUserColor1;
+uniform vec3 uUserColor2;
+void main(void) {
+    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
+    float angle = atan(uv.y, uv.x);
+    float radius = length(uv);
+    float wave = sin(10.0 * radius - uTime * 2.0 + uAudioLevel * 5.0) + sin(5.0 * angle + uTime);
+    vec3 col = mix(uUserColor1, uUserColor2, 0.5 + 0.5 * sin(uTime + wave));
+    gl_FragColor = vec4(col * (1.0 + radius * 0.5), 1.0);
+}`;
+const fsSourceTunnel = `
+precision mediump float;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform float uAudioLevel;
+uniform vec3 uUserColor1;
+uniform vec3 uUserColor2;
+void main(void) {
+    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
+    float angle = atan(uv.y, uv.x);
+    float radius = length(uv);
+    float stripes = sin(10.0 * radius - uTime * 5.0 + uAudioLevel * 10.0);
+    vec3 col = mix(uUserColor1, uUserColor2, 0.5 + 0.5 * cos(uTime + stripes + angle * 2.0));
+    gl_FragColor = vec4(col * (1.0 - radius), 1.0);
+}`;
+const fsSourceSpectrum = `
+precision mediump float;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform float uAudioLevel;
+uniform vec3 uUserColor1;
+uniform vec3 uUserColor2;
+void main(void) {
+    vec2 uv = gl_FragCoord.xy / uResolution;
+    float barWidth = 0.05;
+    float index = floor(uv.x / barWidth);
+    float modTime = mod(uTime + index, 1.0);
+    float bar = step(0.5, fract(uv.y * 10.0 + modTime + uAudioLevel * 5.0));
+    vec3 col = mix(uUserColor1, uUserColor2, bar * (0.5 + 0.5 * sin(uTime)));
+    gl_FragColor = vec4(col, 1.0);
+}`;
+const fsSourceGrid = `
+precision highp float;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform float uAudioLevel;
+uniform vec3 uUserColor1;
+uniform vec3 uUserColor2;
+void main() {
+    vec2 uv = (gl_FragCoord.xy * 2.0 - uResolution.xy) / min(uResolution.x, uResolution.y);
+    uv *= 2.0 + uAudioLevel * 3.0;
+    vec2 grid = fract(uv * 2.0);
+    grid = abs(grid - 0.5);
+    float line = min(grid.x, grid.y);
+    float mask = smoothstep(0.1, 0.05, line);
+    vec3 color = mix(uUserColor1, uUserColor2, mask);
+    color *= sin(uTime + uv.x * 2.0) * 0.5 + 0.5;
+    color += pow(1.0 - line, 20.0) * uUserColor2 * (0.5 + uAudioLevel);
+    gl_FragColor = vec4(color, 1.0);
+}`;
+const fsSourcePlasma = `
+precision highp float;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform float uAudioLevel;
+uniform vec3 uUserColor1;
+uniform vec3 uUserColor2;
+void main() {
+    vec2 uv = gl_FragCoord.xy / uResolution.xy * 2.0 - 1.0;
+    uv.x *= uResolution.x / uResolution.y;
+    float t = uTime * 0.5;
+    float c = sin(t + uv.x * 5.0) + 
+            sin(t + uv.y * 3.0) + 
+            sin((t + uv.x + uv.y) * 4.0) * uAudioLevel * 2.0;
+    vec3 color = mix(uUserColor1, uUserColor2, 0.5 + 0.5 * sin(c * 3.0 + uTime)) * 
+                (1.0 - length(uv) * 0.3) * 
+                (1.0 + uAudioLevel * 2.0);
+    gl_FragColor = vec4(color, 1.0);
+}`;
+const fsSourceRadial = `
+precision highp float;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform float uAudioLevel;
+uniform vec3 uUserColor1;
+uniform vec3 uUserColor2;
+void main() {
+    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution.xy) / uResolution.y;
+    float radius = length(uv) * 3.0;
+    float angle = atan(uv.y, uv.x);
+    float wave = sin(radius * 10.0 - uTime * 5.0) * 
+                cos(angle * 5.0 + uTime) * 
+                (1.0 + uAudioLevel * 3.0);
+    vec3 color = mix(uUserColor1, uUserColor2, smoothstep(0.4, 0.5, abs(wave)));
+    color *= 1.0 - radius * 0.3;
+    gl_FragColor = vec4(color, 1.0);
+}`;
+const fsSourceMoire = `
+precision highp float;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform float uAudioLevel;
+uniform vec3 uUserColor1;
+uniform vec3 uUserColor2;
+void main() {
+    vec2 uv = gl_FragCoord.xy / uResolution.xy * 10.0;
+    uv.x *= uResolution.x / uResolution.y;
+    float pattern1 = sin(uv.x * 10.0 + uTime) * 
+                    cos(uv.y * 8.0 + uTime);
+    float pattern2 = sin((uv.x + uv.y) * 15.0 + uTime) * 
                     (1.0 + uAudioLevel * 2.0);
-        gl_FragColor = vec4(color, 1.0);
-    }`;
-    const fsSourceNeon = `
-    precision highp float;
-    uniform float uTime;
-    uniform vec2 uResolution;
-    uniform float uAudioLevel;
-    uniform vec3 uUserColor1;
-    uniform vec3 uUserColor2;
-    void main() {
-        vec2 uv = gl_FragCoord.xy / uResolution.xy;
-        uv.x *= uResolution.x / uResolution.y;
-        float speed = uTime * 0.5;
-        float gridSize = 0.2 + uAudioLevel * 0.3;
-        vec2 grid = fract(uv * 5.0 + vec2(speed));
-        float line = min(abs(grid.x - 0.5), abs(grid.y - 0.5));
-        float glow = exp(-20.0 * line) * (1.0 + sin(speed * 5.0) * 0.5);
-        vec3 color = mix(uUserColor1, uUserColor2, glow) * glow * (1.0 + uAudioLevel * 3.0);
-        gl_FragColor = vec4(color, 1.0);
-    }`;
-    const fsSourceRadial = `
-    precision highp float;
-    uniform float uTime;
-    uniform vec2 uResolution;
-    uniform float uAudioLevel;
-    uniform vec3 uUserColor1;
-    uniform vec3 uUserColor2;
-    void main() {
-        vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution.xy) / uResolution.y;
-        float radius = length(uv) * 3.0;
-        float angle = atan(uv.y, uv.x);
-        float wave = sin(radius * 10.0 - uTime * 5.0) * 
-                    cos(angle * 5.0 + uTime) * 
-                    (1.0 + uAudioLevel * 3.0);
-        vec3 color = mix(uUserColor1, uUserColor2, smoothstep(0.4, 0.5, abs(wave)));
-        color *= 1.0 - radius * 0.3;
-        gl_FragColor = vec4(color, 1.0);
-    }`;
-    const fsSourceMoire = `
-    precision highp float;
-    uniform float uTime;
-    uniform vec2 uResolution;
-    uniform float uAudioLevel;
-    uniform vec3 uUserColor1;
-    uniform vec3 uUserColor2;
-    void main() {
-        vec2 uv = gl_FragCoord.xy / uResolution.xy * 10.0;
-        uv.x *= uResolution.x / uResolution.y;
-        float pattern1 = sin(uv.x * 10.0 + uTime) * 
-                        cos(uv.y * 8.0 + uTime);
-        float pattern2 = sin((uv.x + uv.y) * 15.0 + uTime) * 
-                        (1.0 + uAudioLevel * 2.0);
-        float combined = sin(pattern1 * 5.0 + pattern2 * 3.0);
-        vec3 color = mix(uUserColor1, uUserColor2, 0.5 + 0.5 * combined);
-        gl_FragColor = vec4(color, 1.0);
-    }`;
-    const fsSourceSineDistort = `
-    precision highp float;
-    uniform float uTime;
-    uniform vec2 uResolution;
-    uniform float uAudioLevel;
-    uniform vec3 uUserColor1;
-    uniform vec3 uUserColor2;
-    void main() {
-        vec2 uv = gl_FragCoord.xy / uResolution.xy;
-        uv.x *= uResolution.x/uResolution.y;
-        float distortion = uAudioLevel * 0.5;
-        uv.x += sin(uv.y * 10.0 + uTime * 2.0) * distortion;
-        uv.y += cos(uv.x * 8.0 + uTime * 1.5) * distortion;
-        vec3 color1 = uUserColor1 * (0.5 + 0.5 * sin(uv.x * 20.0 + uTime));
-        vec3 color2 = uUserColor2 * (0.5 + 0.5 * cos(uv.y * 15.0 - uTime));
-        vec3 finalColor = mix(color1, color2, sin(uTime * 0.5) * 0.5 + 0.5);
-        finalColor *= 1.0 + uAudioLevel * 2.0;
-        gl_FragColor = vec4(finalColor, 1.0);
-    }`;
-    const fsSourceGalaxy = `
-    precision highp float;
-    uniform float uTime;
-    uniform vec2 uResolution;
-    uniform float uAudioLevel;
-    uniform vec3 uUserColor1;
-    uniform vec3 uUserColor2;
-    float noise(vec2 p) {
-        return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453);
+    float combined = sin(pattern1 * 5.0 + pattern2 * 3.0);
+    vec3 color = mix(uUserColor1, uUserColor2, 0.5 + 0.5 * combined);
+    gl_FragColor = vec4(color, 1.0);
+}`;
+const fsSourcePixelate = `
+precision highp float;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform float uAudioLevel;
+uniform vec3 uUserColor1;
+uniform vec3 uUserColor2;
+void main() {
+    float pixelSize = 10.0 + (1.0 - uAudioLevel) * 50.0;
+    vec2 uv = floor(gl_FragCoord.xy / pixelSize) * pixelSize;
+    uv /= uResolution.xy;
+    uv.x *= uResolution.x/uResolution.y;
+    float wave = sin(uv.x * 10.0 + uTime) * cos(uv.y * 8.0 - uTime);
+    vec3 color = mix(uUserColor1, uUserColor2, 
+        0.5 + 0.5 * wave) * 
+        (1.0 - length(uv - 0.5));
+    color *= 0.8 + 0.5 * sin(uTime * 2.0) + uAudioLevel;
+    gl_FragColor = vec4(color, 1.0);
+}`;
+const fsSourceLiquidMetal = `
+precision highp float;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform float uAudioLevel;
+uniform vec3 uUserColor1;
+uniform vec3 uUserColor2;
+float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453);
+}
+void main() {
+    vec2 uv = gl_FragCoord.xy / uResolution.xy;
+    uv.x *= uResolution.x/uResolution.y;   
+    for(float i = 1.0; i < 4.0; i++) {
+        uv.x += 0.3/i * sin(i * uv.y + uTime * 0.5 + uAudioLevel * 2.0);
+        uv.y += 0.3/i * sin(i * uv.x + uTime * 0.5 + uAudioLevel * 2.0);
     }
-    void main() {
-        vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution.xy) / uResolution.y;
-        float radius = length(uv) * 2.0;
-        float angle = atan(uv.y, uv.x);   
-        float spiral = sin(radius * 20.0 - angle * 10.0 - uTime * 2.0);
-        spiral += sin(radius * 15.0 + angle * 8.0 + uTime * 1.5);
-        vec3 color = mix(uUserColor1, uUserColor2, 
-            smoothstep(0.4, 0.6, spiral * radius)) * 
-            (1.0 - smoothstep(0.0, 2.0, radius));
-        float stars = pow(noise(uv * 100.0), 100.0) * 
-                    (0.5 + 0.5 * sin(uTime * 5.0));
-        color += stars * uUserColor2 * (1.0 + uAudioLevel);
-        gl_FragColor = vec4(color, 1.0);
-    }`;
-    const fsSourcePixelate = `
-    precision highp float;
-    uniform float uTime;
-    uniform vec2 uResolution;
-    uniform float uAudioLevel;
-    uniform vec3 uUserColor1;
-    uniform vec3 uUserColor2;
-    void main() {
-        float pixelSize = 10.0 + (1.0 - uAudioLevel) * 50.0;
-        vec2 uv = floor(gl_FragCoord.xy / pixelSize) * pixelSize;
-        uv /= uResolution.xy;
-        uv.x *= uResolution.x/uResolution.y;
-        float wave = sin(uv.x * 10.0 + uTime) * cos(uv.y * 8.0 - uTime);
-        vec3 color = mix(uUserColor1, uUserColor2, 
-            0.5 + 0.5 * wave) * 
-            (1.0 - length(uv - 0.5));
-        color *= 0.8 + 0.5 * sin(uTime * 2.0) + uAudioLevel;
-        gl_FragColor = vec4(color, 1.0);
-    }`;
-    const fsSourceLiquidMetal = `
-    precision highp float;
-    uniform float uTime;
-    uniform vec2 uResolution;
-    uniform float uAudioLevel;
-    uniform vec3 uUserColor1;
-    uniform vec3 uUserColor2;
-    float hash(vec2 p) {
-        return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453);
+    vec3 color = mix(
+        uUserColor1 * (0.5 + 0.5 * sin(uv.x * 20.0 + uTime)),
+        uUserColor2 * (0.5 + 0.5 * cos(uv.y * 15.0 - uTime)),
+        sin(uTime * 0.2) * 0.5 + 0.5
+    );
+    color *= 1.0 - length(uv - 0.5) + uAudioLevel * 0.5;
+    gl_FragColor = vec4(color * 1.5, 1.0);
+}`;
+const fsSourceQuantum = `
+precision highp float;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform float uAudioLevel;
+uniform vec3 uUserColor1;
+uniform vec3 uUserColor2;
+#define PI 3.14159265359
+float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
+float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f*f*(3.0-2.0*f);
+    return mix(mix(hash(i + vec2(0.0,0.0)), 
+                   hash(i + vec2(1.0,0.0)), u.x),
+               mix(hash(i + vec2(0.0,1.0)), 
+                   hash(i + vec2(1.0,1.0)), u.x), u.y);
+}
+void main() {
+    vec2 uv = (gl_FragCoord.xy - 0.5*uResolution.xy)/uResolution.y;
+    float energy = 0.0;
+    for(float i = 0.0; i < 5.0; i++) {
+        float t = uTime * (0.5 + 0.5*sin(i*PI/5.0)) + i*10.0;
+        vec2 dir = vec2(cos(t), sin(t));
+        energy += smoothstep(0.95, 1.0, 
+            sin(30.0*(uv.x*dir.x + uv.y*dir.y) + 5.0*t + uAudioLevel*10.0));
     }
-    void main() {
-        vec2 uv = gl_FragCoord.xy / uResolution.xy;
-        uv.x *= uResolution.x/uResolution.y;   
-        for(float i = 1.0; i < 4.0; i++) {
-            uv.x += 0.3/i * sin(i * uv.y + uTime * 0.5 + uAudioLevel * 2.0);
-            uv.y += 0.3/i * sin(i * uv.x + uTime * 0.5 + uAudioLevel * 2.0);
-        }
-        vec3 color = mix(
-            uUserColor1 * (0.5 + 0.5 * sin(uv.x * 20.0 + uTime)),
-            uUserColor2 * (0.5 + 0.5 * cos(uv.y * 15.0 - uTime)),
-            sin(uTime * 0.2) * 0.5 + 0.5
+    vec2 gridUv = uv * 10.0;
+    vec2 cell = floor(gridUv);
+    vec2 subUv = fract(gridUv);
+    float particle = pow(hash(cell), 10.0) * 
+                    smoothstep(0.5, 0.0, length(subUv - 0.5)) * 
+                    (1.0 + sin(uTime + hash(cell)*10.0));
+    vec3 baseColor = mix(uUserColor1, uUserColor2, 
+                        smoothstep(-0.5, 0.5, uv.y + 0.3*sin(uTime)));
+    vec3 finalColor = baseColor * (energy * 0.8 + particle * 2.0) * 
+                     (0.8 + 0.5*uAudioLevel);
+    gl_FragColor = vec4(finalColor, 1.0);
+}`;
+const fsSourceMatrix = `
+precision highp float;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform float uAudioLevel;
+uniform vec3 uUserColor1;
+uniform vec3 uUserColor2;
+float random(vec2 p) {
+    return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453);
+}
+void main() {
+    vec2 uv = gl_FragCoord.xy / uResolution.xy;
+    uv.x *= uResolution.x/uResolution.y;
+    float cols = 80.0;
+    vec2 grid = floor(uv * cols);
+    vec2 cell = fract(uv * cols);
+    float speed = 2.0 + uAudioLevel*5.0;
+    float yOffset = floor(uTime * speed + grid.x * 5.0);
+    float char = random(grid + yOffset);
+    float trail = smoothstep(0.0, 0.3, fract(-uv.y * cols + uTime*speed));
+    float glow = smoothstep(0.3, 0.0, length(cell - 0.5)) * 
+                (0.5 + 0.5*sin(uTime*5.0 + grid.x));
+    vec3 color = mix(uUserColor1, uUserColor2, char) * 
+                glow * trail * (1.0 + uAudioLevel*2.0);
+    color *= 0.8 + 0.2*sin(uv.y * 1000.0 + uTime*10.0);
+    gl_FragColor = vec4(color, 1.0);
+}`;
+const fsSourceMagnetic = `
+precision highp float;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform float uAudioLevel;
+uniform vec3 uUserColor1;
+uniform vec3 uUserColor2;
+vec2 field(vec2 uv) {
+    float t = uTime * 0.5;
+    return vec2(
+        sin(uv.x*3.0 + t) + sin(uv.y*2.0 + t*1.3),
+        cos(uv.x*2.4 - t) + cos(uv.y*3.1 + t*0.7)
+    );
+}
+void main() {
+    vec2 uv = (gl_FragCoord.xy - 0.5*uResolution.xy)/uResolution.y;
+    vec2 f = field(uv * 2.0);
+    float lines = sin(10.0*(uv.x*f.x + uv.y*f.y) + uTime*2.0);
+    lines = smoothstep(0.9, 1.0, abs(lines));
+    vec2 p = uv;
+    for(int i = 0; i < 10; i++) {
+        p += field(p) * 0.02 * (1.0 + uAudioLevel);
+    }
+    float flow = exp(-length(p - uv)*10.0);
+    vec3 color = mix(uUserColor1, uUserColor2, 
+                    smoothstep(-0.5, 0.5, p.x)) * 
+                (lines + flow) * (1.0 + uAudioLevel);
+    gl_FragColor = vec4(color, 1.0);
+}`;
+const fsSourceOcean = `
+precision highp float;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform float uAudioLevel;
+uniform vec3 uUserColor1;
+uniform vec3 uUserColor2;
+float wave(vec2 uv) {
+    return sin(uv.x*10.0 + uTime) * 
+           sin(uv.y*8.0 + uTime*1.3) * 
+           sin(uTime*0.5 + uv.x*uv.y*5.0);
+}
+void main() {
+    vec2 uv = gl_FragCoord.xy / uResolution.xy;
+    uv.x *= uResolution.x/uResolution.y;
+    vec2 offset = vec2(
+        wave(uv + vec2(0.0, uTime*0.2)),
+        wave(uv + vec2(1.0, uTime*0.3))
+    ) * 0.02 * (1.0 + uAudioLevel);
+    float pattern = sin(30.0*(uv.x + offset.x)) * 
+                   cos(25.0*(uv.y + offset.y)) * 
+                   sin(uTime + 5.0*(uv.x + uv.y));
+    float depth = 1.0 - smoothstep(0.3, 0.8, uv.y);
+    vec3 waterColor = mix(uUserColor1, uUserColor2, depth);
+    vec3 causticColor = uUserColor2 * pattern * depth * 2.0;
+    gl_FragColor = vec4(waterColor + causticColor, 1.0);
+}`;
+const fsSourceEntanglement = `
+precision highp float;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform float uAudioLevel;
+uniform vec3 uUserColor1;
+uniform vec3 uUserColor2;
+mat2 rotate(float a) {
+    return mat2(cos(a), -sin(a), sin(a), cos(a));
+}
+void main() {
+    vec2 uv = (gl_FragCoord.xy - 0.5*uResolution.xy)/uResolution.y;
+    vec3 p = vec3(uv, 0.0);
+    for(int i = 0; i < 5; i++) {
+        p = abs(p) - 0.5;
+        p.xy *= rotate(uTime*0.2 + uAudioLevel);
+        p.yz *= rotate(uTime*0.3);
+        p = p*1.2 - 0.1;
+    }
+    float d = length(p) - 0.1;
+    vec3 color = mix(uUserColor1, uUserColor2, 
+        smoothstep(0.3, 0.5, fract(d*10.0 + uTime))) * 
+        exp(-d*10.0);
+    vec2 grid = floor(uv*20.0);
+    float particle = pow(fract(sin(grid.x*347.1 + grid.y*982.3)*457.2), 50.0) * 
+                    (0.5 + 0.5*sin(uTime*5.0 + grid.x*10.0));
+    gl_FragColor = vec4(color + particle*uUserColor2*5.0, 1.0);
+}`;
+const fsSourceGravWaves = `
+precision highp float;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform float uAudioLevel;
+uniform vec3 uUserColor1;
+uniform vec3 uUserColor2;
+vec3 blackHole(vec2 uv, float mass) {
+    float rs = mass * 0.5; // Schwarzschild radius
+    float r = length(uv);
+    if(r < rs) return vec3(0.0);
+    float deflection = rs / (2.0*r);
+    vec2 distorted = uv * (1.0 + deflection);
+    float disk = smoothstep(0.3, 0.5, 
+        abs(fract(atan(distorted.y, distorted.x)*5.0 + uTime) - 0.5));
+    vec3 color = mix(uUserColor1, uUserColor2, 
+        smoothstep(0.0, 1.0, dot(normalize(uv), vec2(0.0,1.0)))) * 
+        disk * exp(-abs(r - rs*2.0));   
+    return color;
+}
+void main() {
+    vec2 uv = (gl_FragCoord.xy - 0.5*uResolution.xy)/uResolution.y;
+    vec3 color = blackHole(uv, 0.2 + uAudioLevel*0.3);
+    float wave = smoothstep(0.99, 1.0, 
+        sin(length(uv)*50.0 - uTime*10.0)) * 
+        exp(-length(uv)*2.0); 
+    gl_FragColor = vec4(color + wave*uUserColor2*5.0, 1.0);
+}`;
+const fsSourcePhotonic = `
+precision highp float;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform float uAudioLevel;
+uniform vec3 uUserColor1;
+uniform vec3 uUserColor2;
+vec2 complex_exp(vec2 z) {
+    return exp(z.x) * vec2(cos(z.y), sin(z.y));
+}
+void main() {
+    vec2 uv = (gl_FragCoord.xy - 0.5*uResolution.xy)/uResolution.y * 5.0;
+    vec2 z = complex_exp(vec2(uv.y, uv.x + uTime));
+    float bands = smoothstep(0.3, 0.5, 
+        fract(atan(z.y,z.x)*2.0 + length(z)*0.5));
+    vec3 color = mix(
+        uUserColor1 * sin(length(z)*10.0 - uTime),
+        uUserColor2 * cos(atan(z.y,z.x)*5.0),
+        bands
+    );
+    vec2 grid = fract(uv * 2.0);
+    float dots = smoothstep(0.1, 0.09, length(grid - 0.5)) * 
+                (0.5 + 0.5*sin(uTime*5.0 + dot(grid,vec2(100.0))));
+    gl_FragColor = vec4(color * (1.0 + dots*5.0*uAudioLevel), 1.0);
+}`;
+const fsSourceFluid = `
+precision highp float;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform float uAudioLevel;
+uniform vec3 uUserColor1;
+uniform vec3 uUserColor2;
+#define ITERATIONS 8
+vec2 complexMul(vec2 a, vec2 b) {
+    return vec2(a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x);
+}
+void main() {
+    vec2 uv = gl_FragCoord.xy/uResolution.xy;
+    uv.x *= uResolution.x/uResolution.y;
+    vec2 velocity = vec2(0.0);
+    float pressure = 0.0;
+    for(int i = 0; i < ITERATIONS; i++) {
+        vec2 z = vec2(uv*2.0-1.0) * (1.0 + float(i)*0.3);
+        z = complexMul(z, vec2(cos(uTime), sin(uTime)));
+        velocity += 0.1*vec2(sin(z.x*3.0 + uTime), cos(z.y*2.0 - uTime));
+        pressure += length(velocity)*0.5;
+    }
+    vec3 color = mix(uUserColor1, uUserColor2, 
+        smoothstep(0.3, 0.7, fract(pressure*2.0 + uAudioLevel))) * 
+        (1.0 + 2.0*sin(pressure*10.0 + uTime));
+    float particles = pow(fract(sin(uv.x*347.1 + uv.y*982.3)*457.2), 50.0) * 
+                     (0.5 + 0.5*sin(uTime*10.0));
+    gl_FragColor = vec4(color + particles*uUserColor2*5.0, 1.0);
+}`;
+const fsSourceWormhole = `
+precision highp float;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform float uAudioLevel;
+uniform vec3 uUserColor1;
+uniform vec3 uUserColor2;
+mat2 rotate(float a) {
+    return mat2(cos(a), -sin(a), sin(a), cos(a));
+}
+void main() {
+    vec2 uv = (gl_FragCoord.xy - 0.5*uResolution.xy)/uResolution.y;
+    uv *= rotate(uTime*0.2);
+    float disk = smoothstep(0.3, 0.5, 
+        fract(atan(uv.y, uv.x)*5.0 + uTime) - 0.5) * 
+        exp(-length(uv)*2.0);
+    float singularity = 1.0/smoothstep(0.0, 0.2, length(uv));
+    uv *= mix(1.0, singularity, 0.5);
+    vec3 color = mix(
+        uUserColor1 * (1.0 - smoothstep(0.0, 0.5, uv.x)),
+        uUserColor2 * smoothstep(0.0, 0.5, uv.x),
+        disk
+    );
+    gl_FragColor = vec4(color * singularity, 1.0);
+}`;
+const fsSourceQCD = `
+precision highp float;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform float uAudioLevel;
+uniform vec3 uUserColor1;
+uniform vec3 uUserColor2;
+vec3 quarkColors(int flavor) {
+    if(flavor == 0) return uUserColor1;
+    if(flavor == 1) return uUserColor2;
+    return vec3(1.0);
+}
+void main() {
+    vec2 uv = (gl_FragCoord.xy - 0.5*uResolution.xy)/uResolution.y;
+    float field = sin(10.0*length(uv) - uTime*5.0) * 
+                 cos(5.0*atan(uv.y, uv.x) + uTime*3.0);
+    vec3 color = vec3(0.0);
+    for(int i=0; i<3; i++) {
+        vec2 pos = 0.2*vec2(
+            sin(uTime + float(i)*2.094),
+            cos(uTime + float(i)*2.094)
         );
-        color *= 1.0 - length(uv - 0.5) + uAudioLevel * 0.5;
-        gl_FragColor = vec4(color * 1.5, 1.0);
-    }`;
-    const animationModules = [
-      new AnimationModule("Waves", fsSourceWaves),
-      new AnimationModule("Tunnel", fsSourceTunnel),
-      new AnimationModule("Spectrum", fsSourceSpectrum),
-      new AnimationModule("Particles", fsSourceParticles),
-      new AnimationModule("Geometric Grid", fsSourceGrid),
-      new AnimationModule("Liquid Plasma", fsSourcePlasma),
-      new AnimationModule("Neon Grid", fsSourceNeon),
-      new AnimationModule("Radial Waves", fsSourceRadial),
-      new AnimationModule("Moire Pattern", fsSourceMoire),
-      new AnimationModule("Sine Distortion", fsSourceSineDistort),
-      new AnimationModule("Galaxy Spiral", fsSourceGalaxy),
-      new AnimationModule("Pixelation", fsSourcePixelate),
-      new AnimationModule("Liquid Metal", fsSourceLiquidMetal)
-    ];
-    let currentAnimationIndex = 0;
-    function updateModeDisplay() {
-      document.getElementById("modeDisplay").textContent = "Mode: " + animationModules[currentAnimationIndex].name;
+        color += quarkColors(i) * 
+                exp(-length(uv - pos)*10.0) * 
+                (1.0 + field);
     }
+    gl_FragColor = vec4(color * (1.0 + uAudioLevel), 1.0);
+}`;
+const animationModules = [
+  new AnimationModule("Waves", fsSourceWaves),
+  new AnimationModule("Tunnel", fsSourceTunnel),
+  new AnimationModule("Spectrum", fsSourceSpectrum),
+  new AnimationModule("Geometric Grid", fsSourceGrid),
+  new AnimationModule("Liquid Plasma", fsSourcePlasma),
+  new AnimationModule("Radial Waves", fsSourceRadial),
+  new AnimationModule("Moire Pattern", fsSourceMoire),
+  new AnimationModule("Pixelation", fsSourcePixelate),
+  new AnimationModule("Liquid Metal", fsSourceLiquidMetal),
+  new AnimationModule("Quantum Fields", fsSourceQuantum),
+  new AnimationModule("Digital Matrix", fsSourceMatrix),
+  new AnimationModule("Magnetic Flux", fsSourceMagnetic),
+  new AnimationModule("Ocean Caustics", fsSourceOcean),
+  new AnimationModule("Quantum Entanglement", fsSourceEntanglement),
+  new AnimationModule("Gravitational Waves", fsSourceGravWaves),
+  new AnimationModule("Photonic Crystal", fsSourcePhotonic),
+  new AnimationModule("Fluid Dynamics", fsSourceFluid),
+  new AnimationModule("Wormhole", fsSourceWormhole),
+  new AnimationModule("Quantum Chromo", fsSourceQCD)
+];
+let currentAnimationIndex = 0;
+function updateModeDisplay() {
+  document.getElementById("modeDisplay").textContent = "Mode: " + animationModules[currentAnimationIndex].name;
+}
+updateModeDisplay();
+const vertices = new Float32Array([
+  -1, -1,   1, -1,   -1, 1,
+  -1, 1,   1, -1,    1, 1
+]);
+const buffer = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+function bindAttributes(program) {
+  const aPosition = gl.getAttribLocation(program, "aPosition");
+  gl.enableVertexAttribArray(aPosition);
+  gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
+}
+let audioBuffer = null, analyser = null, dataArray = null, sourceNode = null;
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+const audioCtx = new AudioContext();
+const dest = audioCtx.createMediaStreamDestination();
+document.getElementById("audioUpload").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    const arrayBuffer = await file.arrayBuffer();
+    audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    console.log("Audio file loaded.");
+  }
+});
+let startTime = null;
+function render(timestamp) {
+  if (!startTime) startTime = timestamp;
+  const elapsed = (timestamp - startTime) / 1000.0;
+  const animModule = animationModules[currentAnimationIndex];
+  animModule.use();
+  bindAttributes(animModule.shader.program);
+  gl.clearColor(0.0, 0.0, 0.0, 1.0);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.uniform1f(animModule.uniforms.uTime, elapsed);
+  gl.uniform2f(animModule.uniforms.uResolution, canvas.width, canvas.height);
+  let audioLevel = 0.0;
+  if (analyser && dataArray) {
+    analyser.getByteFrequencyData(dataArray);
+    let sum = 0;
+    for (let i = 0; i < dataArray.length; i++) {
+      sum += dataArray[i];
+    }
+    audioLevel = sum / dataArray.length / 255;
+  }
+  gl.uniform1f(animModule.uniforms.uAudioLevel, audioLevel);
+  const userColor1 = document.getElementById("userColor1").value;
+  const userColor2 = document.getElementById("userColor2").value;
+  const rgb1 = hexToRgb(userColor1);
+  const rgb2 = hexToRgb(userColor2);
+  gl.uniform3f(animModule.uniforms.uUserColor1, rgb1[0], rgb1[1], rgb1[2]);
+  gl.uniform3f(animModule.uniforms.uUserColor2, rgb2[0], rgb2[1], rgb2[2]);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+  requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+function hexToRgb(hex) {
+  let r = parseInt(hex.slice(1, 3), 16) / 255;
+  let g = parseInt(hex.slice(3, 5), 16) / 255;
+  let b = parseInt(hex.slice(5, 7), 16) / 255;
+  return [r, g, b];
+}
+window.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowRight") {
+    currentAnimationIndex = (currentAnimationIndex + 1) % animationModules.length;
     updateModeDisplay();
-    const vertices = new Float32Array([
-      -1, -1,   1, -1,   -1, 1,
-      -1, 1,   1, -1,    1, 1
-    ]);
-    const buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
-    function bindAttributes(program) {
-      const aPosition = gl.getAttribLocation(program, "aPosition");
-      gl.enableVertexAttribArray(aPosition);
-      gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
-    }
-    let audioBuffer = null, analyser = null, dataArray = null, sourceNode = null;
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    const audioCtx = new AudioContext();
-    const dest = audioCtx.createMediaStreamDestination();
-    document.getElementById("audioUpload").addEventListener("change", async (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        const arrayBuffer = await file.arrayBuffer();
-        audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-        console.log("Audio file loaded.");
-      }
-    });
-    let startTime = null;
-    function render(timestamp) {
-      if (!startTime) startTime = timestamp;
-      const elapsed = (timestamp - startTime) / 1000.0;
-      const animModule = animationModules[currentAnimationIndex];
-      animModule.use();
-      bindAttributes(animModule.shader.program);
-      gl.clearColor(0.0, 0.0, 0.0, 1.0);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      gl.uniform1f(animModule.uniforms.uTime, elapsed);
-      gl.uniform2f(animModule.uniforms.uResolution, canvas.width, canvas.height);
-      let audioLevel = 0.0;
-      if (analyser && dataArray) {
-        analyser.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          sum += dataArray[i];
-        }
-        audioLevel = sum / dataArray.length / 255;
-      }
-      gl.uniform1f(animModule.uniforms.uAudioLevel, audioLevel);
-      const userColor1 = document.getElementById("userColor1").value;
-      const userColor2 = document.getElementById("userColor2").value;
-      const rgb1 = hexToRgb(userColor1);
-      const rgb2 = hexToRgb(userColor2);
-      gl.uniform3f(animModule.uniforms.uUserColor1, rgb1[0], rgb1[1], rgb1[2]);
-      gl.uniform3f(animModule.uniforms.uUserColor2, rgb2[0], rgb2[1], rgb2[2]);
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
-      requestAnimationFrame(render);
-    }
-    requestAnimationFrame(render);
-    function hexToRgb(hex) {
-      let r = parseInt(hex.slice(1, 3), 16) / 255;
-      let g = parseInt(hex.slice(3, 5), 16) / 255;
-      let b = parseInt(hex.slice(5, 7), 16) / 255;
-      return [r, g, b];
-    }
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "ArrowRight") {
-        currentAnimationIndex = (currentAnimationIndex + 1) % animationModules.length;
-        updateModeDisplay();
-      } else if (e.key === "ArrowLeft") {
-        currentAnimationIndex = (currentAnimationIndex - 1 + animationModules.length) % animationModules.length;
-        updateModeDisplay();
-      }
-    });
-    document.querySelectorAll('.dimension-button').forEach(button => {
-      let intervalId = null;
-      let timeoutId = null;
-      const startAction = () => {
-        const target = document.getElementById(button.dataset.target);
-        const direction = button.dataset.direction;
-        const step = direction === 'up' ? 50 : -50;
+  } else if (e.key === "ArrowLeft") {
+    currentAnimationIndex = (currentAnimationIndex - 1 + animationModules.length) % animationModules.length;
+    updateModeDisplay();
+  }
+});
+document.querySelectorAll('.dimension-button').forEach(button => {
+  let intervalId = null;
+  let timeoutId = null;
+  const startAction = () => {
+    const target = document.getElementById(button.dataset.target);
+    const direction = button.dataset.direction;
+    const step = direction === 'up' ? 50 : -50;
+    target.value = Math.max(100, parseInt(target.value || 0) + step);
+    target.dispatchEvent(new Event('input'));
+    timeoutId = setTimeout(() => {
+      intervalId = setInterval(() => {
         target.value = Math.max(100, parseInt(target.value || 0) + step);
         target.dispatchEvent(new Event('input'));
-        timeoutId = setTimeout(() => {
-          intervalId = setInterval(() => {
-            target.value = Math.max(100, parseInt(target.value || 0) + step);
-            target.dispatchEvent(new Event('input'));
-          }, 50);
-        }, 300);
-      };
-      const stopAction = () => {
-        clearTimeout(timeoutId);
-        clearInterval(intervalId);
-      };
-      button.addEventListener('mousedown', startAction);
-      button.addEventListener('mouseup', stopAction);
-      button.addEventListener('mouseleave', stopAction);
-    });
-    let mediaRecorder, chunks = [];
-    const qualitySelect = document.getElementById("qualitySelect");
-    const startBtn = document.getElementById("startRecording");
-    const stopBtn = document.getElementById("stopRecording");
-    const previewContainer = document.getElementById("previewContainer");
-    const previewVideo = document.getElementById("previewVideo");
-    const downloadBtn = document.getElementById("downloadRecording");
-    const closePreviewBtn = document.getElementById("closePreview");
-    startBtn.addEventListener("click", async () => {
-      await audioCtx.resume();
-      chunks = [];
-      if (audioBuffer) {
-        if (sourceNode) {
-          try { sourceNode.stop(); } catch (e) {}
-        }
-        sourceNode = audioCtx.createBufferSource();
-        sourceNode.buffer = audioBuffer;
-        const gainNode = audioCtx.createGain();
-        sourceNode.connect(gainNode);
-        analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 512;
-        dataArray = new Uint8Array(analyser.frequencyBinCount);
-        gainNode.connect(analyser);
-        gainNode.connect(audioCtx.destination);
-        gainNode.connect(dest);
-        sourceNode.start(0);
-      }
-      const canvasStream = canvas.captureStream(60);
-      const audioStream = dest.stream;
-      const tracks = [...canvasStream.getTracks(), ...audioStream.getTracks()];
-      const combinedStream = new MediaStream(tracks);
-      const selectedQuality = qualitySettings[qualitySelect.value];
-      mediaRecorder = new MediaRecorder(combinedStream, {
-        mimeType: "video/webm;codecs=vp9,opus",
-        ...selectedQuality
-      });
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) chunks.push(e.data);
-      };
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: "video/webm" });
-        const url = URL.createObjectURL(blob);
-        previewVideo.src = url;
-        previewVideo.load();
-        previewContainer.style.display = "block";
-        downloadBtn.onclick = () => {
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = "visualization.webm";
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-        };
-      };
-      mediaRecorder.start(1000);
-      startBtn.disabled = true;
-      stopBtn.disabled = false;
-    });
-    stopBtn.addEventListener("click", () => {
-      mediaRecorder.stop();
-      startBtn.disabled = false;
-      stopBtn.disabled = true;
-      if (sourceNode) {
-        try { sourceNode.stop(); } catch (e) {}
-      }
-    });
-    closePreviewBtn.addEventListener("click", () => {
-      previewContainer.style.display = "none";
-      previewVideo.src = "";
-    });
-  </script>
-</body>
+      }, 50);
+    }, 300);
+  };
+  const stopAction = () => {
+    clearTimeout(timeoutId);
+    clearInterval(intervalId);
+  };
+  button.addEventListener('mousedown', startAction);
+  button.addEventListener('mouseup', stopAction);
+  button.addEventListener('mouseleave', stopAction);
+});
+let mediaRecorder, chunks = [];
+const qualitySelect = document.getElementById("qualitySelect");
+const startBtn = document.getElementById("startRecording");
+const stopBtn = document.getElementById("stopRecording");
+const previewContainer = document.getElementById("previewContainer");
+const previewVideo = document.getElementById("previewVideo");
+const downloadBtn = document.getElementById("downloadRecording");
+const closePreviewBtn = document.getElementById("closePreview");
+startBtn.addEventListener("click", async () => {
+  await audioCtx.resume();
+  chunks = [];
+  if (audioBuffer) {
+    if (sourceNode) {
+      try { sourceNode.stop(); } catch (e) {}
+    }
+    sourceNode = audioCtx.createBufferSource();
+    sourceNode.buffer = audioBuffer;
+    const gainNode = audioCtx.createGain();
+    sourceNode.connect(gainNode);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    dataArray = new Uint8Array(analyser.frequencyBinCount);
+    gainNode.connect(analyser);
+    gainNode.connect(audioCtx.destination);
+    gainNode.connect(dest);
+    sourceNode.start(0);
+  }
+  const canvasStream = canvas.captureStream(60);
+  const audioStream = dest.stream;
+  const tracks = [...canvasStream.getTracks(), ...audioStream.getTracks()];
+  const combinedStream = new MediaStream(tracks);
+  const selectedQuality = qualitySettings[qualitySelect.value];
+  mediaRecorder = new MediaRecorder(combinedStream, {
+    mimeType: "video/webm;codecs=vp9,opus",
+    ...selectedQuality
+  });
+  mediaRecorder.ondataavailable = (e) => {
+    if (e.data && e.data.size > 0) chunks.push(e.data);
+  };
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(chunks, { type: "video/webm" });
+    const url = URL.createObjectURL(blob);
+    previewVideo.src = url;
+    previewVideo.load();
+    previewContainer.style.display = "block";
+    downloadBtn.onclick = () => {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "visualization.webm";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    };
+  };
+  mediaRecorder.start(1000);
+  startBtn.disabled = true;
+  stopBtn.disabled = false;
+});
+stopBtn.addEventListener("click", () => {
+  mediaRecorder.stop();
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+  if (sourceNode) {
+    try { sourceNode.stop(); } catch (e) {}
+  }
+});
+closePreviewBtn.addEventListener("click", () => {
+  previewContainer.style.display = "none";
+  previewVideo.src = "";
+});
+</script>
 </html>
