@@ -2,28 +2,30 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <title>Professional Audio Responsive Media Maker</title>
     <style>
       body {
         margin: 0;
         overflow: hidden;
+        background: #000;
+        color: #fff;
+        font-family: sans-serif;
       }
       canvas {
         display: block;
-        width: 100vw;
-        height: 100vh;
       }
       #controls {
         position: fixed;
         top: 10px;
         left: 10px;
-        z-index: 100;
-        background: rgba(255, 255, 255, 0.8);
+        background: rgba(0, 0, 0, 0.6);
         padding: 10px;
-        border-radius: 4px;
+        border-radius: 5px;
+        z-index: 100;
       }
       button,
       input {
-        margin-right: 5px;
+        margin: 5px;
       }
     </style>
   </head>
@@ -36,20 +38,23 @@
     </div>
     <script>
       const canvas = document.getElementById("canvas");
-      const gl = canvas.getContext("webgl");
+      const gl = canvas.getContext("webgl", { antialias: true });
       if (!gl) {
         alert("WebGL not supported");
         throw new Error("WebGL not supported");
       }
       function resizeCanvas() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = window.innerWidth * dpr;
+        canvas.height = window.innerHeight * dpr;
+        canvas.style.width = window.innerWidth + "px";
+        canvas.style.height = window.innerHeight + "px";
+        gl.viewport(0, 0, canvas.width, canvas.height);
       }
       window.addEventListener("resize", resizeCanvas);
       resizeCanvas();
       const vsSource = ` attribute vec2 aPosition;void main(){gl_Position=vec4(aPosition,0.0,1.0);}`;
-      const fsSource = ` precision mediump float;uniform float uTime;uniform vec2 uResolution;uniform float uAudioLevel;void main(void){vec2 uv=gl_FragCoord.xy/uResolution.xy;vec3 color1=0.5+0.5*cos(uTime+uv.xyx+vec3(0.0,2.0,4.0));float dist=distance(uv,vec2(0.5));vec3 color2=mix(vec3(1.0,0.2,0.3),vec3(0.2,0.3,1.0),smoothstep(0.3,0.6,dist));float blend=0.5+0.5*sin(uTime*0.5);blend*=(0.5+uAudioLevel);vec3 finalColor=mix(color1,color2,blend);gl_FragColor=vec4(finalColor,1.0);}`;
+      const fsSource = ` precision mediump float;uniform float uTime;uniform vec2 uResolution;uniform float uAudioLevel;float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}float noise(vec2 p){vec2 i=floor(p);vec2 f=fract(p);float a=hash(i);float b=hash(i+vec2(1.0,0.0));float c=hash(i+vec2(0.0,1.0));float d=hash(i+vec2(1.0,1.0));vec2 u=f*f*(3.0-2.0*f);return mix(a,b,u.x)+(c-a)*u.y*(1.0-u.x)+(d-b)*u.x*u.y;}float fbm(vec2 p){float total=0.0;float amplitude=0.5;for(int i=0;i<5;i++){total+=noise(p)*amplitude;p*=2.0;amplitude*=0.5;}return total;}void main(void){vec2 uv=gl_FragCoord.xy/uResolution.xy;vec2 p=uv-0.5;p.x*=uResolution.x/uResolution.y;float angle=uTime*0.3+uAudioLevel*3.0;float s=sin(angle);float c=cos(angle);mat2 rot=mat2(c,-s,s,c);p=rot*p;float n=fbm(p*3.0+uTime*0.5);vec3 colorA=vec3(0.1,0.2,0.5);vec3 colorB=vec3(1.0,0.5,0.2);vec3 col=mix(colorA,colorB,n);col+=uAudioLevel*0.5;gl_FragColor=vec4(pow(col,vec3(0.4545)),1.0);}`;
       function compileShader(source, type) {
         const shader = gl.createShader(type);
         gl.shaderSource(shader, source);
@@ -126,7 +131,7 @@
       requestAnimationFrame(render);
       let mediaRecorder;
       let chunks = [];
-      const videoBitrate = 2500000;
+      const videoBitrate = 5000000;
       document
         .getElementById("startRecording")
         .addEventListener("click", async () => {
@@ -143,7 +148,7 @@
             const gainNode = audioCtx.createGain();
             sourceNode.connect(gainNode);
             analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 256;
+            analyser.fftSize = 512;
             dataArray = new Uint8Array(analyser.frequencyBinCount);
             gainNode.connect(analyser);
             gainNode.connect(audioCtx.destination);
@@ -162,9 +167,7 @@
             videoBitsPerSecond: videoBitrate,
           });
           mediaRecorder.ondataavailable = (e) => {
-            if (e.data && e.data.size > 0) {
-              chunks.push(e.data);
-            }
+            if (e.data && e.data.size > 0) chunks.push(e.data);
           };
           mediaRecorder.onstop = () => {
             const blob = new Blob(chunks, { type: "video/webm" });
