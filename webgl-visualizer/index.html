@@ -132,6 +132,59 @@
       border: none;
       border-radius: 6px;
     }
+    .dimension-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+    .dimension-input {
+      position: relative;
+    }
+    .dimension-input input {
+      text-align: center;
+    }
+    .dimension-input input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(255, 0, 119, 0.1);
+      outline: none;
+    }
+    .dimension-input input[type="number"]::-webkit-inner-spin-button,
+    .dimension-input input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      appearance: none;
+      margin: 0;
+    }
+    .dimension-input input[type="number"] {
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+    .dimension-controls {
+      position: absolute;
+      right: 4px;
+      top: 75%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+    }
+    .dimension-button {
+      max-height: 10px;
+      background: rgba(255, 255, 255, 0.05);
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 3px;
+      transition: all 0.2s ease;
+    }
+    .dimension-button:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-primary);
+    }
+    .dimension-button:active {
+      background: var(--accent);
+    }
   </style>
 </head>
 <body>
@@ -151,12 +204,24 @@
       </select>
     </div>
     <div class="control-group">
-      <label for="canvasWidth">Canvas Width</label>
-      <input type="number" id="canvasWidth" value="800" min="100" max="4000" />
-    </div>
-    <div class="control-group">
-      <label for="canvasHeight">Canvas Height</label>
-      <input type="number" id="canvasHeight" value="600" min="100" max="4000" />
+      <div class="dimension-group">
+        <div class="dimension-input">
+          <label for="canvasWidth">Canvas Width</label>
+          <input type="number" id="canvasWidth" value="800" min="100" max="4000" />
+          <div class="dimension-controls">
+            <button class="dimension-button" data-target="canvasWidth" data-direction="up">▲</button>
+            <button class="dimension-button" data-target="canvasWidth" data-direction="down">▼</button>
+          </div>
+        </div>
+        <div class="dimension-input">
+          <label for="canvasHeight">Canvas Height</label>
+          <input type="number" id="canvasHeight" value="600" min="100" max="4000" />
+          <div class="dimension-controls">
+            <button class="dimension-button" data-target="canvasHeight" data-direction="up">▲</button>
+            <button class="dimension-button" data-target="canvasHeight" data-direction="down">▼</button>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="control-group">
       <label for="userColor">Visualizer Color</label>
@@ -388,6 +453,30 @@
         currentAnimationIndex = (currentAnimationIndex - 1 + animationModules.length) % animationModules.length;
         updateModeDisplay();
       }
+    });
+    document.querySelectorAll('.dimension-button').forEach(button => {
+      let intervalId = null;
+      let timeoutId = null;
+      const startAction = () => {
+        const target = document.getElementById(button.dataset.target);
+        const direction = button.dataset.direction;
+        const step = direction === 'up' ? 50 : -50;
+        target.value = Math.max(100, parseInt(target.value || 0) + step);
+        target.dispatchEvent(new Event('input'));
+        timeoutId = setTimeout(() => {
+          intervalId = setInterval(() => {
+            target.value = Math.max(100, parseInt(target.value || 0) + step);
+            target.dispatchEvent(new Event('input'));
+          }, 50);
+        }, 300);
+      };
+      const stopAction = () => {
+        clearTimeout(timeoutId);
+        clearInterval(intervalId);
+      };
+      button.addEventListener('mousedown', startAction);
+      button.addEventListener('mouseup', stopAction);
+      button.addEventListener('mouseleave', stopAction);
     });
     let mediaRecorder, chunks = [];
     const qualitySelect = document.getElementById("qualitySelect");
