@@ -377,10 +377,134 @@
         gl_FragColor = vec4(col, 1.0);
       }
     `;
+    const fsSourceParticles = `
+      precision highp float;
+      uniform float uTime;
+      uniform vec2 uResolution;
+      uniform float uAudioLevel;
+      uniform vec3 uUserColor;
+      float random(vec2 st) {
+          return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+      }
+      void main() {
+          vec2 uv = gl_FragCoord.xy/uResolution.xy;
+          uv.x *= uResolution.x/uResolution.y;
+          vec3 color = vec3(0.0);
+          float particleCount = 50.0 + uAudioLevel * 100.0;
+          for(float i = 0.0; i < 50.0; i++) {
+              if(i >= particleCount) break;
+              vec2 pos = vec2(
+                  random(vec2(i)) + sin(uTime*0.5 + i) * 0.3,
+                  fract(random(vec2(i*2.0)) + uTime*0.2 * (0.5 + uAudioLevel))
+              );
+              float dist = length(uv - pos);
+              color += uUserColor * 0.02/(dist*15.0) * (1.0 + uAudioLevel*5.0);
+          }
+          gl_FragColor = vec4(color,1.0);
+      }
+    `;
+    const fsSourceGrid = `
+      precision highp float;
+      uniform float uTime;
+      uniform vec2 uResolution;
+      uniform float uAudioLevel;
+      uniform vec3 uUserColor;
+      void main() {
+          vec2 uv = (gl_FragCoord.xy * 2.0 - uResolution.xy) / min(uResolution.x, uResolution.y);
+          uv *= 2.0 + uAudioLevel * 3.0;
+          vec2 grid = fract(uv * 2.0);
+          grid = abs(grid - 0.5);
+          float line = min(grid.x, grid.y);
+          float mask = smoothstep(0.1, 0.05, line);
+          vec3 color = mix(vec3(0.1), uUserColor, mask);
+          color *= sin(uTime + uv.x * 2.0) * 0.5 + 0.5;
+          color += pow(1.0 - line, 20.0) * uUserColor * (0.5 + uAudioLevel);
+          gl_FragColor = vec4(color, 1.0);
+      }
+    `;
+    const fsSourcePlasma = `
+      precision highp float;
+      uniform float uTime;
+      uniform vec2 uResolution;
+      uniform float uAudioLevel;
+      uniform vec3 uUserColor;
+      void main() {
+          vec2 uv = gl_FragCoord.xy / uResolution.xy * 2.0 - 1.0;
+          uv.x *= uResolution.x / uResolution.y;
+          float t = uTime * 0.5;
+          float c = sin(t + uv.x * 5.0) + 
+                  sin(t + uv.y * 3.0) + 
+                  sin((t + uv.x + uv.y) * 4.0) * uAudioLevel * 2.0;
+          vec3 color = uUserColor * (0.5 + 0.5 * sin(c * 3.0 + uTime)) * 
+                      (1.0 - length(uv) * 0.3) * 
+                      (1.0 + uAudioLevel * 2.0);
+          gl_FragColor = vec4(color, 1.0);
+      }
+    `;
+    const fsSourceNeon = `
+      precision highp float;
+      uniform float uTime;
+      uniform vec2 uResolution;
+      uniform float uAudioLevel;
+      uniform vec3 uUserColor;
+      void main() {
+          vec2 uv = gl_FragCoord.xy / uResolution.xy;
+          uv.x *= uResolution.x / uResolution.y;
+          float speed = uTime * 0.5;
+          float gridSize = 0.2 + uAudioLevel * 0.3;
+          vec2 grid = fract(uv * 5.0 + vec2(speed));
+          float line = min(abs(grid.x - 0.5), abs(grid.y - 0.5));
+          float glow = exp(-20.0 * line) * (1.0 + sin(speed * 5.0) * 0.5);
+          vec3 color = uUserColor * glow * (1.0 + uAudioLevel * 3.0);
+          gl_FragColor = vec4(color, 1.0);
+      }
+    `;
+    const fsSourceRadial = `
+      precision highp float;
+      uniform float uTime;
+      uniform vec2 uResolution;
+      uniform float uAudioLevel;
+      uniform vec3 uUserColor;
+      void main() {
+          vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution.xy) / uResolution.y;
+          float radius = length(uv) * 3.0;
+          float angle = atan(uv.y, uv.x);
+          float wave = sin(radius * 10.0 - uTime * 5.0) * 
+                      cos(angle * 5.0 + uTime) * 
+                      (1.0 + uAudioLevel * 3.0);
+          vec3 color = uUserColor * smoothstep(0.4, 0.5, abs(wave));
+          color *= 1.0 - radius * 0.3;
+          gl_FragColor = vec4(color, 1.0);
+      }
+    `;
+    const fsSourceMoire = `
+      precision highp float;
+      uniform float uTime;
+      uniform vec2 uResolution;
+      uniform float uAudioLevel;
+      uniform vec3 uUserColor;
+      void main() {
+          vec2 uv = gl_FragCoord.xy / uResolution.xy * 10.0;
+          uv.x *= uResolution.x / uResolution.y;
+          float pattern1 = sin(uv.x * 10.0 + uTime) * 
+                          cos(uv.y * 8.0 + uTime);
+          float pattern2 = sin((uv.x + uv.y) * 15.0 + uTime) * 
+                          (1.0 + uAudioLevel * 2.0);
+          float combined = sin(pattern1 * 5.0 + pattern2 * 3.0);
+          vec3 color = uUserColor * (0.5 + 0.5 * combined);
+          gl_FragColor = vec4(color, 1.0);
+      }
+    `;
     const animationModules = [
       new AnimationModule("Waves", fsSourceWaves),
       new AnimationModule("Tunnel", fsSourceTunnel),
-      new AnimationModule("Spectrum", fsSourceSpectrum)
+      new AnimationModule("Spectrum", fsSourceSpectrum),
+      new AnimationModule("Particles", fsSourceParticles),
+      new AnimationModule("Geometric Grid", fsSourceGrid),
+      new AnimationModule("Liquid Plasma", fsSourcePlasma),
+      new AnimationModule("Neon Grid", fsSourceNeon),
+      new AnimationModule("Radial Waves", fsSourceRadial),
+      new AnimationModule("Moire Pattern", fsSourceMoire)
     ];
     let currentAnimationIndex = 0;
     function updateModeDisplay() {
