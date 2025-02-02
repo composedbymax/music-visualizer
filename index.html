@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Professional Audio Responsive Media Maker</title>
+    <title>Pro Audio Responsive Media Maker</title>
     <style>
       body {
         margin: 0;
@@ -38,7 +38,10 @@
     </div>
     <script>
       const canvas = document.getElementById("canvas");
-      const gl = canvas.getContext("webgl", { antialias: true });
+      const gl = canvas.getContext("webgl", {
+        antialias: true,
+        preserveDrawingBuffer: true,
+      });
       if (!gl) {
         alert("WebGL not supported");
         throw new Error("WebGL not supported");
@@ -54,7 +57,7 @@
       window.addEventListener("resize", resizeCanvas);
       resizeCanvas();
       const vsSource = ` attribute vec2 aPosition;void main(){gl_Position=vec4(aPosition,0.0,1.0);}`;
-      const fsSource = ` precision mediump float;uniform float uTime;uniform vec2 uResolution;uniform float uAudioLevel;float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}float noise(vec2 p){vec2 i=floor(p);vec2 f=fract(p);float a=hash(i);float b=hash(i+vec2(1.0,0.0));float c=hash(i+vec2(0.0,1.0));float d=hash(i+vec2(1.0,1.0));vec2 u=f*f*(3.0-2.0*f);return mix(a,b,u.x)+(c-a)*u.y*(1.0-u.x)+(d-b)*u.x*u.y;}float fbm(vec2 p){float total=0.0;float amplitude=0.5;for(int i=0;i<5;i++){total+=noise(p)*amplitude;p*=2.0;amplitude*=0.5;}return total;}void main(void){vec2 uv=gl_FragCoord.xy/uResolution.xy;vec2 p=uv-0.5;p.x*=uResolution.x/uResolution.y;float angle=uTime*0.3+uAudioLevel*3.0;float s=sin(angle);float c=cos(angle);mat2 rot=mat2(c,-s,s,c);p=rot*p;float n=fbm(p*3.0+uTime*0.5);vec3 colorA=vec3(0.1,0.2,0.5);vec3 colorB=vec3(1.0,0.5,0.2);vec3 col=mix(colorA,colorB,n);col+=uAudioLevel*0.5;gl_FragColor=vec4(pow(col,vec3(0.4545)),1.0);}`;
+      const fsSource = ` precision mediump float;uniform float uTime;uniform vec2 uResolution;uniform float uAudioLevel;float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}float noise(vec2 p){vec2 i=floor(p);vec2 f=fract(p);float a=hash(i);float b=hash(i+vec2(1.0,0.0));float c=hash(i+vec2(0.0,1.0));float d=hash(i+vec2(1.0,1.0));vec2 u=f*f*(3.0-2.0*f);return mix(a,b,u.x)+(c-a)*u.y*(1.0-u.x)+(d-b)*u.x*u.y;}float fbm(vec2 p){float total=0.0;float amplitude=0.5;for(int i=0;i<6;i++){total+=noise(p)*amplitude;p*=2.0;amplitude*=0.5;}return total;}void main(void){vec2 uv=gl_FragCoord.xy/uResolution.xy;vec2 p=uv-0.5;p.x*=uResolution.x/uResolution.y;float angle=uTime*0.3+uAudioLevel*3.0;float s=sin(angle);float c=cos(angle);mat2 rot=mat2(c,-s,s,c);p=rot*p;float n=fbm(p*3.0+uTime*0.5);vec3 colorA=vec3(0.1,0.2,0.5);vec3 colorB=vec3(1.0,0.5,0.2);vec3 col=mix(colorA,colorB,n);col+=uAudioLevel*0.5;gl_FragColor=vec4(pow(col,vec3(0.4545)),1.0);}`;
       function compileShader(source, type) {
         const shader = gl.createShader(type);
         gl.shaderSource(shader, source);
@@ -131,7 +134,7 @@
       requestAnimationFrame(render);
       let mediaRecorder;
       let chunks = [];
-      const videoBitrate = 5000000;
+      const videoBitrate = 10000000;
       document
         .getElementById("startRecording")
         .addEventListener("click", async () => {
@@ -163,7 +166,7 @@
           ];
           const combinedStream = new MediaStream(tracks);
           mediaRecorder = new MediaRecorder(combinedStream, {
-            mimeType: "video/webm;codecs=vp8,opus",
+            mimeType: "video/webm;codecs=vp9,opus",
             videoBitsPerSecond: videoBitrate,
           });
           mediaRecorder.ondataavailable = (e) => {
