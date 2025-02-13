@@ -1,0 +1,91 @@
+<!-- Created by Max Warren -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MAXW</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Music Visualizer</h1>
+        <div class="controls">
+            <div class="control-group">
+                <h3>Audio Controls</h3>
+                <label class="file-label" for="audioInput">
+                    Choose Audio File
+                    <input type="file" id="audioInput" class="file-input" accept="audio/*">
+                </label>
+                <button id="playButton" class="btn" disabled>Play</button>
+                <button id="pauseButton" class="btn" disabled>Pause</button>
+                <div class="slider-container">
+                    <label>
+                        Volume
+                        <input type="range" id="volumeControl" min="0" max="1" step="0.01" value="1">
+                    </label>
+                </div>
+                <div id="waveform" class="waveform"></div>
+            </div>
+            <div class="control-group">
+                <h3>Visualization Style</h3>
+                <select id="visualizerType">
+                    <option value="spiral">Spiral</option>
+                    <option value="bars">Dynamic Bars</option>
+                    <option value="circular">Circular</option>
+                    <option value="particles">Particle System</option>
+                    <option value="waveform">Waveform</option>
+                    <option value="spectrum">3D Spectrum</option>
+                    <option value="kaleidoscope">Kaleidoscope</option>
+                    <option value="terrain">Audio Terrain</option>
+                </select>
+                <div class="preset-buttons">
+                    <button class="preset-btn" data-preset="neon">Neon</button>
+                    <button class="preset-btn" data-preset="minimal">Minimal</button>
+                    <button class="preset-btn" data-preset="retro">Retro</button>
+                </div>
+            </div>
+            <div class="control-group">
+                <h3>Color & Effects</h3>
+                <label>Primary Color</label>
+                <input type="color" id="primaryColor" value="#00ff00">
+                <label>Secondary Color</label>
+                <input type="color" id="secondaryColor" value="#ff00ff">
+                <label>Background Color</label>
+                <input type="color" id="backgroundColor" value="#000000">
+                <div class="slider-container">
+                    <label>
+                        Sensitivity
+                        <input type="range" id="sensitivity" min="0.5" max="2" step="0.1" value="1">
+                    </label>
+                </div>
+                <div class="slider-container">
+                    <label>
+                        Smoothing
+                        <input type="range" id="smoothing" min="0" max="0.9" step="0.1" value="0.5">
+                    </label>
+                </div>
+            </div>
+            <div class="control-group">
+                <h3>Recording</h3>
+                <button id="startRecording" class="btn" disabled>Start Recording</button>
+                <button id="stopRecording" class="btn" disabled>Stop Recording</button>
+                <div class="slider-container">
+                    <label>
+                        Video Quality
+                        <select id="videoQuality">
+                            <option value="high">High (4K)</option>
+                            <option value="medium" selected>Medium (1080p)</option>
+                            <option value="low">Low (720p)</option>
+                        </select>
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="visualizer-container">
+            <canvas id="visualizer"></canvas>
+            <canvas id="overlay"></canvas>
+            <div class="animation-stats" id="stats"></div>
+        </div>
+    </div>
+    <script src ="script.js"></script>
+</body>
+</html>

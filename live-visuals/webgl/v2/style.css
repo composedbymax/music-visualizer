@@ -1,0 +1,177 @@
+:root {
+    --primary-color: #00ff88;
+    --secondary-color: #ff00ff;
+    --background-color: #111;
+    --control-bg: rgba(0, 0, 0, 0.85);
+    }
+    body, html {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    height: 100%;
+    background: var(--background-color);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    }
+    canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    }
+    .visualizer-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    }
+    .controls {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: var(--control-bg);
+    padding: 25px;
+    border-radius: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    width: 320px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: transform 0.3s ease;
+    }
+    .controls.collapsed {
+    transform: translateX(-400px);
+    }
+    .toggle-controls {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    font-size: 20px;
+    padding: 5px;
+    transition: transform 0.3s ease;
+    }
+    .controls.collapsed .toggle-controls {
+    transform: rotate(180deg);
+    }
+    .controls h2 {
+    font-size: 20px;
+    margin: 0 0 25px 0;
+    text-align: center;
+    color: var(--primary-color);
+    font-weight: 600;
+    }
+    .control-group {
+    margin-bottom: 25px;
+    position: relative;
+    }
+    .control-group:last-child {
+    margin-bottom: 0;
+    }
+    .control-group label {
+    display: block;
+    font-size: 14px;
+    color: #fff;
+    margin-bottom: 10px;
+    font-weight: 500;
+    }
+    .slider-container {
+    position: relative;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    }
+    .control-group input[type="range"] {
+    background: rgba(255, 255, 255, 0.1);
+    }
+    .control-group span {
+    position: absolute;
+    right: 0;
+    top: -25px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(0, 0, 0, 0.5);
+    padding: 2px 6px;
+    border-radius: 10px;
+    transition: opacity 0.3s ease;
+    }
+    .control-group select,
+    .control-group input[type="number"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    color: white;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    }
+    .control-group select:hover,
+    .control-group input[type="number"]:hover {
+    border-color: var(--primary-color);
+    }
+    .control-group select:focus,
+    .control-group input[type="number"]:focus {
+    border-color: var(--primary-color);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 255, 136, 0.2);
+    }
+    .button-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    }
+    .control-button {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    text-align: center;
+    font-size: 14px;
+    }
+    .mic-button {
+    background: var(--primary-color);
+    color: #000;
+    }
+    .mic-button:hover {
+    background: #00cc6f;
+    transform: translateY(-2px);
+    }
+    .mic-button.active {
+    background: #ff3366;
+    color: white;
+    }
+    .preset-button {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    }
+    .preset-button:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+    }
+    .visualization-stats {
+    background: var(--control-bg);
+    padding: 15px;
+    border-radius: 10px;
+    font-size: 12px;
+    }
+    .stats-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    }
+    .stats-label {
+    color: rgba(255, 255, 255, 0.7);
+    margin-right: 10px;
+    }
+    .stats-value {
+    color: var(--primary-color);
+    font-family: monospace;
+    }

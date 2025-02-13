@@ -1,0 +1,29 @@
+<!-- Created by Max Warren -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="WebGL visualizer using mic input frequency">
+    <title>LIVE VISUALIZER</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="/css/root.css">
+    <link rel="stylesheet" href="/css/slider.css">
+</head>
+<body>
+    <div id="controlPanel">
+        <button id="micButton" class="button">Enable Microphone</button>
+        <button id="modeButton" class="button">Change Visualization</button>
+        <button id="fullscreenButton" class="button">Enter Fullscreen</button>
+        <label class="control-label" for="colorPicker">Color</label>
+        <input type="color" id="colorPicker" class="control-input">
+        <label class="control-label" for="zoomSlider">Zoom</label>
+        <input type="range" id="zoomSlider" class="control-input" min="0.5" max="2" step="0.1" value="1">
+        <label class="control-label" for="frequencySlider">Sensitivity</label>
+        <input type="range" id="frequencySlider" class="control-input" min="5" max="30" step="1" value="15">      
+        <div id="fpsCounter"></div>
+    </div>
+    <canvas id="glCanvas"></canvas>
+    <script src="script.js" defer></script>
+</body>
+</html>
