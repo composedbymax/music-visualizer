@@ -23,14 +23,14 @@ const fsSourceElectricField = `
 precision highp float;
 uniform float uTime;
 uniform vec2 uResolution;
+uniform float uAudioLevel;
 uniform vec3 uUserColor1;
 uniform vec3 uUserColor2;
-
 void main(void) {
     vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution.xy) / uResolution.y;
     float angle = atan(uv.y, uv.x);
     float radius = length(uv);
-    float field = cos(angle * 5.0 + uTime) * sin(radius * 10.0 - uTime);
+    float field = cos(angle * 5.0 + uTime * uAudioLevel) * sin(radius * 10.0 - uTime);
     vec3 col = mix(uUserColor1, uUserColor2, 0.5 + 0.5 * field);
     gl_FragColor = vec4(col, 1.0);
 }`;
