@@ -2,13 +2,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="download a .webm file of uploaded audio, background image and center image with visualizer manipulated by the audio overlayed in">
-    <title>MAX</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="root.css">
-    <link rel="stylesheet" href="slider.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="download a .webm file of uploaded audio, background image and center image with visualizer manipulated by the audio overlayed in">
+<title>MAX</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="root.css">
+<link rel="stylesheet" href="slider.css">
 </head>
 <body>
     <div class="container">
@@ -77,16 +77,16 @@
                 <input type="color" id="secondaryColor" value="#0fff5f">
                 <span>Accent</span>
             </div>
-            <!-- <?php if (isset($_SESSION['username'])): ?> -->
-                <div class="control-group">
-                    <button id="xbuieowdldwigwsfvsjk">REMOVE WATERMARK</button>
-                </div>
-            <!-- <?php endif; ?> -->
+            <?php if (isset($_SESSION['username'])): ?>
+            <div class="control-group">
+                <button id="xbuieowdldwigwsfvsjk">REMOVE WATERMARK</button>
+            </div>
+            <?php endif; ?>
         </div>
         <div class="visualizer-container">
             <canvas id="visualizer"></canvas>
         </div>
     </div>
-    <script src="script.js" defer></script>
+    <script src="script.js"></script>
 </body>
 </html>

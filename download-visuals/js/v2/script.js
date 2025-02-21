@@ -423,7 +423,7 @@ function drawPulseRingsVisualization(dataArray, bufferLength) {
     const centerX = canvasWidth / 2;
     const centerY = canvasHeight / 2;
     for (let i = 0; i < bufferLength; i += 8) {
-        const value = (dataArray[i] / 255) * sensitivityFactor;
+        const value = (dataArray[i] / 255);
         const maxRadius = Math.min(canvasWidth, canvasHeight) / 2;
         const radius = Math.max(10, value * maxRadius);
         const r = primaryColor.r + (secondaryColor.r - primaryColor.r) * value;
@@ -451,18 +451,18 @@ function draw(timestamp) {
     }
     ctx.drawImage(bgCanvas, 0, 0);
     switch (currentVisualizerType) {
-        case 'waveform': drawWaveformVisualization(dataArray, bufferLength); break;
-        case 'circular': drawCircularVisualization(dataArray, bufferLength); break;
-        case 'spectrogram': drawSpectrogramVisualization(dataArray, bufferLength); break;
-        case 'dna': drawDNAHelixVisualization(dataArray, bufferLength); break;
-        case 'kaleidoscope': drawKaleidoscopeVisualization(dataArray, bufferLength); break;
-        case 'matrix': drawMatrixVisualization(dataArray, bufferLength); break;
-        case 'honeycomb': drawHexGridVisualization(dataArray, bufferLength); break;
-        case 'neuroNetwork': drawNeuroNetworkVisualization(dataArray, bufferLength); break;
-        case 'mandala': drawMandalaVisualization(dataArray, bufferLength); break;
-        case 'galaxy': drawGalaxyVisualization(dataArray, bufferLength); break;
-        case 'crystal': drawCrystalVisualization(dataArray, bufferLength); break;
-        case 'pulseRings': drawPulseRingsVisualization(dataArray, bufferLength); break;
+        case 'waveform':drawWaveformVisualization(adjustedDataArray, bufferLength);break;
+        case 'circular':drawCircularVisualization(adjustedDataArray, bufferLength);break;
+        case 'spectrogram':drawSpectrogramVisualization(adjustedDataArray, bufferLength);break;
+        case 'dna':drawDNAHelixVisualization(adjustedDataArray, bufferLength);break;
+        case 'kaleidoscope':drawKaleidoscopeVisualization(adjustedDataArray, bufferLength);break;
+        case 'matrix':drawMatrixVisualization(adjustedDataArray, bufferLength);break;
+        case 'honeycomb':drawHexGridVisualization(adjustedDataArray, bufferLength);break;
+        case 'neuroNetwork':drawNeuroNetworkVisualization(adjustedDataArray, bufferLength);break;
+        case 'mandala':drawMandalaVisualization(adjustedDataArray, bufferLength);break;
+        case 'galaxy':drawGalaxyVisualization(adjustedDataArray, bufferLength);break;
+        case 'crystal':drawCrystalVisualization(adjustedDataArray, bufferLength);break;
+        case 'pulseRings':drawPulseRingsVisualization(adjustedDataArray, bufferLength);break;
     }
     if (albumArt.complete && albumArt.src) {
         ctx.drawImage(albumArt, albumX, albumY, albumSize, albumSize);
