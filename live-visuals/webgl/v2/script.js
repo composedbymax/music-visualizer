@@ -66,7 +66,6 @@ float wavy(vec2 st, float time) {
     for(int i = 0; i < 64; i++) {
     float freq = float(i) * 0.1;
     wave += (u_audioData[i] * 2.0) * sin(r * 20.0 + angle * 12.0 + time + freq) * u_audioSensitivity;
-
     }
     return wave * u_effectIntensity;
 }
@@ -78,7 +77,6 @@ float swirl(vec2 st, float time) {
     for(int i = 0; i < 128; i++) {
     float freq = float(i) * 0.1;
     wave += (u_audioData[i] * 2.0) * sin(r * 5.0 + angle * 1.0 + time + freq) * u_audioSensitivity;
-
     }
     return wave * u_effectIntensity;
 }
@@ -268,6 +266,17 @@ function disconnectAudio() {
     document.body.classList.remove('recording');
     }
 }
+const fullscreenButton = document.getElementById('fullscreenButton');
+fullscreenButton.addEventListener('click', () => {
+  const container = document.querySelector('.visualizer-container');
+  if (!document.fullscreenElement) {
+    container.requestFullscreen().catch(err => {
+      console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+    });
+  } else {
+    document.exitFullscreen();
+  }
+});
 micButton.addEventListener('click', () => {
     if (!isAudioInitialized) {
     initAudio();
@@ -377,7 +386,6 @@ function createQuad() {
     const buffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
-    
     return buffer;
 }
 function getAudioLevel() {
