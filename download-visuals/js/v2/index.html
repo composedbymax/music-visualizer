@@ -7,14 +7,9 @@
     <meta name="description" content="download a .webm file of uploaded audio, background image and center image with visualizer manipulated by the audio overlayed in">
     <title>MAX</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="/css/slider.css">
+    <link rel="stylesheet" href="root.css">
+    <link rel="stylesheet" href="slider.css">
 </head>
-<?php
-session_start();
-include $_SERVER['DOCUMENT_ROOT'] . '/inc/nav.php'; 
-include $_SERVER['DOCUMENT_ROOT'] . '/inc/appnav.php'; 
-include $_SERVER['DOCUMENT_ROOT'] . '/inc/instruct.php';
-?>
 <body>
     <div class="container">
         <div class="controls">
@@ -82,11 +77,11 @@ include $_SERVER['DOCUMENT_ROOT'] . '/inc/instruct.php';
                 <input type="color" id="secondaryColor" value="#0fff5f">
                 <span>Accent</span>
             </div>
-            <?php if (isset($_SESSION['username'])): ?>
+            <!-- <?php if (isset($_SESSION['username'])): ?> -->
                 <div class="control-group">
                     <button id="xbuieowdldwigwsfvsjk">REMOVE WATERMARK</button>
                 </div>
-            <?php endif; ?>
+            <!-- <?php endif; ?> -->
         </div>
         <div class="visualizer-container">
             <canvas id="visualizer"></canvas>
