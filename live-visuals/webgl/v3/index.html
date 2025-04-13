@@ -1,0 +1,289 @@
+<!-- WebGL Visualizer -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MAXW Visualizer</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="slider.css" />
+</head>
+<body>
+  <div class="visualizer-container">
+    <canvas id="webgl-canvas"></canvas>
+    <div class="controls">
+      <button class="toggle-controls">≡</button>
+      <h2>WEBGL VISUAL ENGINE</h2>
+      <div class="button-group">
+        <button id="micButton" class="control-button mic-button">Enable Microphone</button>
+        <button id="fullscreenButton" class="control-button">Fullscreen</button>
+      </div>
+      <div class="control-group">
+        <label for="visualizationType">Visualization Type</label>
+        <select id="visualizationType">
+          <option value="0">Ripple</option>
+          <option value="1">Kaleidoscope</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label for="audioSensitivity">Sensitivity / Intensity</label>
+        <div class="slider-container">
+          <input class="slider" type="range" id="audioSensitivity" min="0" max="5" step="0.1" value="2.5" />
+          <span id="audioSensitivityValue">2.5</span>
+        </div>
+      </div>
+      <div class="control-group dual-color-group">
+        <div class="color-item">
+          <label for="color1">Primary Color</label>
+          <input type="color" id="color1" value="#ff0000" />
+        </div>
+        <div class="color-item">
+          <label for="color2">Secondary Color</label>
+          <input type="color" id="color2" value="#0000ff" />
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="timeSpeed">Animation Speed</label>
+        <div class="slider-container">
+          <input class="slider" type="range" id="timeSpeed" min="0" max="2" step="0.01" value="1" />
+          <span id="timeSpeedValue">1.0</span>
+        </div>
+      </div>
+      <div class="visualization-stats">
+        <div class="stats-row"><span class="stats-label">Peak Frequency:</span><span class="stats-value" id="peakFreq">0 Hz</span></div>
+        <div class="stats-row"><span class="stats-label">Average Volume:</span><span class="stats-value" id="avgVolume">-∞ dB</span></div>
+        <div class="stats-row"><span class="stats-label">Frame Rate:</span><span class="stats-value" id="frameRate">0 FPS</span></div>
+      </div>
+    </div>
+  </div>
+  <script>
+    function hexToRgbNormalized(hex) {
+      const r = parseInt(hex.substr(1,2),16)/255;
+      const g = parseInt(hex.substr(3,2),16)/255;
+      const b = parseInt(hex.substr(5,2),16)/255;
+      return [r,g,b];
+    }
+    const fragmentShaderSource = `
+        precision highp float;
+        uniform float u_time;
+        uniform vec2 u_resolution;
+        uniform int u_visualizationType;
+        uniform float u_audioData[64];
+        uniform float u_audioLevel;
+        uniform float u_audioSensitivity;
+        uniform vec3 u_color1;
+        uniform vec3 u_color2;
+        float random(vec2 st) {
+        return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+        }
+        float ripple(vec2 st, float time) {
+        vec2 pos = st - 0.5;
+        float r = length(pos)*2.0;
+        float angle = atan(pos.y,pos.x);
+        float rippleEffect = 0.0;
+        for(int i=0; i<32; i++){
+            float freq = float(i)*0.00002;
+            float wave = sin(r*10.0 - time*4.0 + freq);
+            rippleEffect += u_audioData[i]*wave*u_audioSensitivity;
+        }
+        float beams = 0.0;
+        for(int i=0; i<12; i++){
+            float rot = angle + time*0.5 + float(i)*3.14159/3.0;
+            beams += pow(abs(sin(rot*3.0)),5.0)*0.3;
+        }
+        return (rippleEffect + beams) * u_audioSensitivity;
+        }
+        float kaleidoscope(vec2 st, float time) {
+        vec2 pos = st - 0.5;
+        float r = length(pos), angle = atan(pos.y,pos.x);
+        float segments = 8.0;
+        angle = mod(angle + time*0.2, 2.0*3.14159/segments);
+        angle = abs(angle - 3.14159/segments);
+        vec2 kpos = vec2(cos(angle), sin(angle)) * r;
+        float pattern = 0.0;
+        for(int i=0; i<32; i++){
+            float freq = float(i) * 0.3;
+            pattern += u_audioData[i] * sin(kpos.x * 20.0 + time + freq)
+                                * cos(kpos.y * 20.0 - time + freq)
+                                * u_audioSensitivity;
+        }
+        return pattern * (10.0 - r) * u_audioSensitivity;
+        }
+        void main(){
+        vec2 st = gl_FragCoord.xy / u_resolution;
+        float t = u_time * 0.5;
+        float vis = (u_visualizationType == 0) ? ripple(st, t) : kaleidoscope(st, t);
+        float f = 0.5 + 0.5 * sin(vis + t * 0.1);
+        vec3 color = mix(u_color1, u_color2, f);
+        float boost = u_audioLevel * u_audioSensitivity;
+        color = mix(color, vec3(1.0), boost * vis * 0.5);
+        gl_FragColor = vec4(color, 1.0);
+        }`;
+    const vertexShaderSource = `
+        attribute vec4 a_position;
+        void main(){ gl_Position = a_position; }`;
+
+    const canvas = document.getElementById('webgl-canvas');
+    const gl = canvas.getContext('webgl');
+    let audioContext, analyzer, micSource;
+    let audioData = new Float32Array(64);
+    let isAudio = false;
+    const micButton = document.getElementById('micButton');
+    const fullscreenButton = document.getElementById('fullscreenButton');
+    const visualizationType = document.getElementById('visualizationType');
+    const audioSensitivity = document.getElementById('audioSensitivity');
+    const audioSensitivityValue = document.getElementById('audioSensitivityValue');
+    const color1Picker = document.getElementById('color1');
+    const color2Picker = document.getElementById('color2');
+    const timeSpeed = document.getElementById('timeSpeed');
+    const timeSpeedValue = document.getElementById('timeSpeedValue');
+    const stats = {
+      peakFreq: document.getElementById('peakFreq'),
+      avgVolume: document.getElementById('avgVolume'),
+      frameRate: document.getElementById('frameRate')
+    };
+    function initAudio(){
+      navigator.mediaDevices.getUserMedia({audio:true})
+        .then(stream => {
+          audioContext = new AudioContext();
+          analyzer = audioContext.createAnalyser();
+          analyzer.fftSize = 128;
+          micSource = audioContext.createMediaStreamSource(stream);
+          micSource.connect(analyzer);
+          isAudio = true;
+          micButton.textContent = 'Disable Microphone';
+        })
+        .catch(err => console.error(err));
+    }
+    function stopAudio(){
+      if(micSource){
+        micSource.disconnect();
+        isAudio = false;
+        micButton.textContent = 'Enable Microphone';
+      }
+    }
+    micButton.addEventListener('click', () => {
+      isAudio ? stopAudio() : initAudio();
+    });
+    fullscreenButton.addEventListener('click', () => {
+      if (!document.fullscreenElement) canvas.requestFullscreen();
+      else document.exitFullscreen();
+    });
+    audioSensitivity.addEventListener('input', () => {
+      audioSensitivityValue.textContent = parseFloat(audioSensitivity.value).toFixed(1);
+    });
+    timeSpeed.addEventListener('input', () => {
+      timeSpeedValue.textContent = parseFloat(timeSpeed.value).toFixed(2);
+    });
+    function adjustSlider(slider, display, delta, min, max, precision) {
+      let newValue = Math.min(max, Math.max(min, parseFloat(slider.value) + delta));
+      slider.value = newValue.toFixed(precision);
+      display.textContent = newValue.toFixed(precision);
+    }
+    function compile(src, type) {
+      const s = gl.createShader(type);
+      gl.shaderSource(s, src);
+      gl.compileShader(s);
+      return s;
+    }
+    const program = gl.createProgram();
+    gl.attachShader(program, compile(vertexShaderSource, gl.VERTEX_SHADER));
+    gl.attachShader(program, compile(fragmentShaderSource, gl.FRAGMENT_SHADER));
+    gl.linkProgram(program);
+    gl.useProgram(program);
+    const posLoc = gl.getAttribLocation(program, 'a_position');
+    const quad = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      -1, -1,  1, -1,  -1,  1,
+      -1,  1,  1, -1,   1,  1
+    ]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(posLoc);
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+    const uni = {
+      time: gl.getUniformLocation(program, 'u_time'),
+      resolution: gl.getUniformLocation(program, 'u_resolution'),
+      visualizationType: gl.getUniformLocation(program, 'u_visualizationType'),
+      audioData: gl.getUniformLocation(program, 'u_audioData'),
+      audioLevel: gl.getUniformLocation(program, 'u_audioLevel'),
+      audioSensitivity: gl.getUniformLocation(program, 'u_audioSensitivity'),
+      color1: gl.getUniformLocation(program, 'u_color1'),
+      color2: gl.getUniformLocation(program, 'u_color2')
+    };
+    let lastTime = 0, frameCount = 0;
+    function render(now) {
+      const t = now * 0.001 * parseFloat(timeSpeed.value);
+      frameCount++;
+      if(now - lastTime > 1000) {
+        stats.frameRate.textContent = Math.round(frameCount * 1000 / (now - lastTime)) + ' FPS';
+        frameCount = 0;
+        lastTime = now;
+      }
+      if (isAudio) {
+        const freqData = new Float32Array(analyzer.frequencyBinCount);
+        analyzer.getFloatFrequencyData(freqData);
+        let sum = 0, peak = 0, peakIdx = 0;
+        for (let i = 0; i < freqData.length; i++) {
+          const v = Math.pow(10, freqData[i] / 20);
+          sum += v;
+          if (v > peak) { peak = v; peakIdx = i; }
+          audioData[i] = v;
+        }
+        stats.avgVolume.textContent = (20 * Math.log10(sum / freqData.length)).toFixed(1) + ' dB';
+        stats.peakFreq.textContent = Math.round(peakIdx * audioContext.sampleRate / analyzer.fftSize) + ' Hz';
+      }
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.uniform1f(uni.time, t);
+      gl.uniform2f(uni.resolution, canvas.width, canvas.height);
+      gl.uniform1i(uni.visualizationType, parseInt(visualizationType.value));
+      gl.uniform1fv(uni.audioData, audioData);
+      gl.uniform1f(uni.audioLevel, isAudio ? Math.sqrt(audioData.reduce((a, v) => a + v * v, 0) / audioData.length) : 0);
+      gl.uniform1f(uni.audioSensitivity, parseFloat(audioSensitivity.value));
+      gl.uniform3fv(uni.color1, hexToRgbNormalized(color1Picker.value));
+      gl.uniform3fv(uni.color2, hexToRgbNormalized(color2Picker.value));
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      requestAnimationFrame(render);
+    }
+    requestAnimationFrame(render);
+    document.querySelector('.toggle-controls').addEventListener('click', () => {
+      document.querySelector('.controls').classList.toggle('collapsed');
+    });
+    document.addEventListener('keydown', (event) => {
+      switch (event.key) {
+        case 'v':
+        case 'V':
+          visualizationType.value = (parseInt(visualizationType.value) === 0 ? 1 : 0);
+          break;
+        case 'ArrowUp':
+          adjustSlider(audioSensitivity, audioSensitivityValue, 0.1, 0, 5, 1);
+          break;
+        case 'ArrowDown':
+          adjustSlider(audioSensitivity, audioSensitivityValue, -0.1, 0, 5, 1);
+          break;
+        case 'ArrowRight':
+          adjustSlider(timeSpeed, timeSpeedValue, 0.01, 0, 2, 2);
+          break;
+        case 'ArrowLeft':
+          adjustSlider(timeSpeed, timeSpeedValue, -0.01, 0, 2, 2);
+          break;
+        case 's':
+        case 'S':
+          document.querySelector('.controls').classList.toggle('collapsed');
+          break;
+        case 'f':
+        case 'F':
+          if(!document.fullscreenElement) canvas.requestFullscreen();
+          else document.exitFullscreen();
+          break;
+        case 'm':
+        case 'M':
+          isAudio ? stopAudio() : initAudio();
+          break;
+      }
+    });
+  </script>
+</body>
+</html>
