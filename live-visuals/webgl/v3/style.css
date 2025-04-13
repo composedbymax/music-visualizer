@@ -157,7 +157,7 @@ canvas {
     background: rgba(255, 255, 255, 0.2);
     transform: translateY(-2px);
 }
-.visualization-stats {
+.stats {
     background: var(--control-bg);
     padding: 15px;
     border-radius: 10px;
