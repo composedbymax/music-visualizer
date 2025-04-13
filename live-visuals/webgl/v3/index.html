@@ -1,10 +1,10 @@
-<!-- WebGL Visualizer -->
+<!-- Created by Max Warren -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MAXW Visualizer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MAX</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="slider.css" />
 </head>
@@ -21,8 +21,9 @@
       <div class="control-group">
         <label for="visualizationType">Visualization Type</label>
         <select id="visualizationType">
-          <option value="0">Ripple</option>
-          <option value="1">Kaleidoscope</option>
+            <option value="0">Ripple</option>
+            <option value="1">Kaleidoscope</option>
+            <option value="2">Vortex</option>
         </select>
       </div>
       <div class="control-group">
@@ -77,52 +78,73 @@
         return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
         }
         float ripple(vec2 st, float time) {
-        vec2 pos = st - 0.5;
-        float r = length(pos)*2.0;
-        float angle = atan(pos.y,pos.x);
-        float rippleEffect = 0.0;
-        for(int i=0; i<32; i++){
-            float freq = float(i)*0.00002;
-            float wave = sin(r*10.0 - time*4.0 + freq);
-            rippleEffect += u_audioData[i]*wave*u_audioSensitivity;
-        }
-        float beams = 0.0;
-        for(int i=0; i<12; i++){
-            float rot = angle + time*0.5 + float(i)*3.14159/3.0;
-            beams += pow(abs(sin(rot*3.0)),5.0)*0.3;
-        }
-        return (rippleEffect + beams) * u_audioSensitivity;
+            vec2 pos = st - 0.5;
+            float r = length(pos)*2.0;
+            float angle = atan(pos.y,pos.x);
+            float rippleEffect = 0.0;
+            for(int i=0; i<32; i++){
+                float freq = float(i)*0.00002;
+                float wave = sin(r*10.0 - time*4.0 + freq);
+                rippleEffect += u_audioData[i]*wave*u_audioSensitivity;
+            }
+            float beams = 0.0;
+            for(int i=0; i<12; i++){
+                float rot = angle + time*0.5 + float(i)*3.14159/3.0;
+                beams += pow(abs(sin(rot*3.0)),5.0)*0.3;
+            }
+            return (rippleEffect + beams) * u_audioSensitivity;
         }
         float kaleidoscope(vec2 st, float time) {
-        vec2 pos = st - 0.5;
-        float r = length(pos), angle = atan(pos.y,pos.x);
-        float segments = 8.0;
-        angle = mod(angle + time*0.2, 2.0*3.14159/segments);
-        angle = abs(angle - 3.14159/segments);
-        vec2 kpos = vec2(cos(angle), sin(angle)) * r;
-        float pattern = 0.0;
-        for(int i=0; i<32; i++){
-            float freq = float(i) * 0.3;
-            pattern += u_audioData[i] * sin(kpos.x * 20.0 + time + freq)
-                                * cos(kpos.y * 20.0 - time + freq)
-                                * u_audioSensitivity;
+            vec2 pos = st - 0.5;
+            float r = length(pos), angle = atan(pos.y,pos.x);
+            float segments = 8.0;
+            angle = mod(angle + time*0.2, 2.0*3.14159/segments);
+            angle = abs(angle - 3.14159/segments);
+            vec2 kpos = vec2(cos(angle), sin(angle)) * r;
+            float pattern = 0.0;
+            for(int i=0; i<32; i++){
+                float freq = float(i) * 0.3;
+                pattern += u_audioData[i] * sin(kpos.x * 20.0 + time + freq)
+                                          * cos(kpos.y * 20.0 - time + freq)
+                                          * u_audioSensitivity;
+            }
+            return pattern * (10.0 - r) * u_audioSensitivity;
         }
-        return pattern * (10.0 - r) * u_audioSensitivity;
+        float Vortex(vec2 st, float time) {
+            vec2 pos = st - 0.5;
+            float r = length(pos)*2.0;
+            float angle = atan(pos.y,pos.x);
+            float spiralPower = 0.0;
+            for(int i=0; i<32; i++){
+                spiralPower += u_audioData[i] * 0.2 * sin(r*15.0 - time*3.0 + float(i));
+            }
+            angle += spiralPower * u_audioSensitivity * 2.0 + r*5.0;
+            float segments = 6.0;
+            angle = mod(angle, 2.0*3.14159/segments);
+            angle = abs(angle - 3.14159/segments);
+            return sin(angle*10.0 + time*2.0) * pow(r,2.0) * u_audioSensitivity;
         }
         void main(){
-        vec2 st = gl_FragCoord.xy / u_resolution;
-        float t = u_time * 0.5;
-        float vis = (u_visualizationType == 0) ? ripple(st, t) : kaleidoscope(st, t);
-        float f = 0.5 + 0.5 * sin(vis + t * 0.1);
-        vec3 color = mix(u_color1, u_color2, f);
-        float boost = u_audioLevel * u_audioSensitivity;
-        color = mix(color, vec3(1.0), boost * vis * 0.5);
-        gl_FragColor = vec4(color, 1.0);
+            vec2 st = gl_FragCoord.xy / u_resolution;
+            float t = u_time * 0.5;
+            float vis;
+            if(u_visualizationType == 0) {
+                vis = ripple(st, t);
+            } else if(u_visualizationType == 1) {
+                vis = kaleidoscope(st, t);
+            } else if(u_visualizationType == 2) {
+                vis = Vortex(st, t);
+            }
+            float f = 0.5 + 0.5 * sin(vis + t * 0.1);
+            vec3 color = mix(u_color1, u_color2, f);
+            float boost = u_audioLevel * u_audioSensitivity;
+            color = mix(color, vec3(1.0), boost * vis * 0.5);
+            gl_FragColor = vec4(color, 1.0);
         }`;
     const vertexShaderSource = `
         attribute vec4 a_position;
-        void main(){ gl_Position = a_position; }`;
-
+        void main(){ gl_Position = a_position; 
+        }`;
     const canvas = document.getElementById('webgl-canvas');
     const gl = canvas.getContext('webgl');
     let audioContext, analyzer, micSource;
@@ -194,10 +216,7 @@
     const posLoc = gl.getAttribLocation(program, 'a_position');
     const quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, quad);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-      -1, -1,  1, -1,  -1,  1,
-      -1,  1,  1, -1,   1,  1
-    ]), gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([ -1, -1,  1, -1,  -1,  1, -1,  1,  1, -1,   1,  1]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(posLoc);
     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
     const uni = {
@@ -255,8 +274,9 @@
       switch (event.key) {
         case 'v':
         case 'V':
-          visualizationType.value = (parseInt(visualizationType.value) === 0 ? 1 : 0);
-          break;
+        const currentType = parseInt(visualizationType.value);
+        visualizationType.value = (currentType + 1) % 3;
+        break;
         case 'ArrowUp':
           adjustSlider(audioSensitivity, audioSensitivityValue, 0.1, 0, 5, 1);
           break;
@@ -264,10 +284,10 @@
           adjustSlider(audioSensitivity, audioSensitivityValue, -0.1, 0, 5, 1);
           break;
         case 'ArrowRight':
-          adjustSlider(timeSpeed, timeSpeedValue, 0.01, 0, 2, 2);
+          adjustSlider(timeSpeed, timeSpeedValue, 0.1, 0, 2, 2);
           break;
         case 'ArrowLeft':
-          adjustSlider(timeSpeed, timeSpeedValue, -0.01, 0, 2, 2);
+          adjustSlider(timeSpeed, timeSpeedValue, -0.1, 0, 2, 2);
           break;
         case 's':
         case 'S':
