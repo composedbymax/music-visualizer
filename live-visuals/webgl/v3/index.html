@@ -19,11 +19,16 @@
         <button id="fullscreenButton" class="control-button">Fullscreen</button>
       </div>
       <div class="control-group">
+        <label for="micSourceSelect">Microphone Source</label>
+        <select id="micSourceSelect"></select>
+      </div>
+      <div class="control-group">
         <label for="visualizationType">Visualization Type</label>
         <select id="visualizationType">
             <option value="0">Ripple</option>
             <option value="1">Kaleidoscope</option>
             <option value="2">Vortex</option>
+            <option value="3">Petal</option>
         </select>
       </div>
       <div class="control-group">
@@ -57,7 +62,7 @@
       </div>
     </div>
   </div>
-  <script>
+  <script type="module">
     function hexToRgbNormalized(hex) {
       const r = parseInt(hex.substr(1,2),16)/255;
       const g = parseInt(hex.substr(3,2),16)/255;
@@ -124,6 +129,31 @@
             angle = abs(angle - 3.14159/segments);
             return sin(angle*10.0 + time*2.0) * pow(r,2.0) * u_audioSensitivity;
         }
+        float Petal(vec2 st, float time) {
+            vec2 pos = st - 0.5;
+            float r = length(pos) * 2.0;
+            float angle = atan(pos.y, pos.x);
+            float bass = 0.0;
+            float mid = 0.0;
+            float treble = 0.0;
+            for (int i = 0; i < 10; i++) {
+                bass += u_audioData[i];
+            }
+            for (int i = 10; i < 24; i++) {
+                mid += u_audioData[i];
+            }
+            for (int i = 24; i < 32; i++) {
+                treble += u_audioData[i];
+            }
+            bass *= u_audioSensitivity * 0.5;
+            mid *= u_audioSensitivity * 0.5;
+            treble *= u_audioSensitivity * 0.5;
+            float rings = sin(r * (12.0 + bass * 20.0) - time * 4.0);
+            float petals = cos(angle * (6.0 + mid * 10.0) + sin(time)) * 0.5 + 0.5;
+            float dynamicFlash = treble * sin(time * 10.0 + r * 5.0);
+            float pattern = rings * petals + dynamicFlash;
+            return pattern * pow(1.0 - r * 0.5, 2.0);
+        }
         void main(){
             vec2 st = gl_FragCoord.xy / u_resolution;
             float t = u_time * 0.5;
@@ -134,6 +164,8 @@
                 vis = kaleidoscope(st, t);
             } else if(u_visualizationType == 2) {
                 vis = Vortex(st, t);
+            } else if(u_visualizationType == 3) {
+                vis = Petal(st, t);
             }
             float f = 0.5 + 0.5 * sin(vis + t * 0.1);
             vec3 color = mix(u_color1, u_color2, f);
@@ -152,6 +184,7 @@
     let isAudio = false;
     const micButton = document.getElementById('micButton');
     const fullscreenButton = document.getElementById('fullscreenButton');
+    const micSelect = document.getElementById('micSourceSelect');
     const visualizationType = document.getElementById('visualizationType');
     const audioSensitivity = document.getElementById('audioSensitivity');
     const audioSensitivityValue = document.getElementById('audioSensitivityValue');
@@ -164,25 +197,60 @@
       avgVolume: document.getElementById('avgVolume'),
       frameRate: document.getElementById('frameRate')
     };
-    function initAudio(){
-      navigator.mediaDevices.getUserMedia({audio:true})
-        .then(stream => {
-          audioContext = new AudioContext();
-          analyzer = audioContext.createAnalyser();
-          analyzer.fftSize = 128;
-          micSource = audioContext.createMediaStreamSource(stream);
-          micSource.connect(analyzer);
-          isAudio = true;
-          micButton.textContent = 'Disable Microphone';
-        })
-        .catch(err => console.error(err));
+    async function populateMicList(preserveId) {
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioInputs = devices.filter(d => d.kind === 'audioinput');
+            const oldValue = preserveId || micSelect.value;
+            micSelect.innerHTML = '';
+            audioInputs.forEach((device, idx) => {
+            const option = document.createElement('option');
+            option.value = device.deviceId;
+            option.text  = device.label || `Microphone ${idx+1}`;
+            micSelect.appendChild(option);
+            });
+            if (oldValue && [...micSelect.options].some(o => o.value === oldValue)) {
+            micSelect.value = oldValue;
+            }
+            micSelect.addEventListener('change', async () => {
+            if (isAudio) {stopAudio(); await initAudio();}
+            });
+        } catch (err) {
+            console.error('Error enumerating devices:', err);
+        }
     }
-    function stopAudio(){
-      if(micSource){
-        micSource.disconnect();
-        isAudio = false;
-        micButton.textContent = 'Enable Microphone';
-      }
+    navigator.mediaDevices.addEventListener('devicechange', () => populateMicList());
+    populateMicList();
+    async function initAudio() {
+        const deviceId = micSelect.value;
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+            audio: { deviceId: deviceId ? { exact: deviceId } : undefined }
+            });
+                audioContext = new AudioContext();
+                analyzer = audioContext.createAnalyser();
+                analyzer.fftSize = 128;
+                micSource = audioContext.createMediaStreamSource(stream);
+                micSource.connect(analyzer);
+                isAudio = true;
+            micButton.textContent = 'Disable Microphone';
+            await populateMicList(deviceId);
+        } catch (err) {
+            console.error('Failed to get audio stream:', err);
+        }
+    }
+    function stopAudio() {
+        if (micSource) {
+            micSource.disconnect();
+            if (audioContext && audioContext.state !== 'closed') {
+            audioContext.close().catch(err => console.error('Error closing audio context:', err));
+            }
+            micSource = null;
+            audioContext = null;
+            analyzer = null;
+            isAudio = false;
+            micButton.textContent = 'Enable Microphone';
+        }
     }
     micButton.addEventListener('click', () => {
       isAudio ? stopAudio() : initAudio();
@@ -216,7 +284,7 @@
     const posLoc = gl.getAttribLocation(program, 'a_position');
     const quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, quad);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([ -1, -1,  1, -1,  -1,  1, -1,  1,  1, -1,   1,  1]), gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([ -1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1 ]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(posLoc);
     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
     const uni = {
@@ -233,7 +301,7 @@
     function render(now) {
       const t = now * 0.001 * parseFloat(timeSpeed.value);
       frameCount++;
-      if(now - lastTime > 1000) {
+      if (now - lastTime > 1000) {
         stats.frameRate.textContent = Math.round(frameCount * 1000 / (now - lastTime)) + ' FPS';
         frameCount = 0;
         lastTime = now;
@@ -259,7 +327,7 @@
       gl.uniform2f(uni.resolution, canvas.width, canvas.height);
       gl.uniform1i(uni.visualizationType, parseInt(visualizationType.value));
       gl.uniform1fv(uni.audioData, audioData);
-      gl.uniform1f(uni.audioLevel, isAudio ? Math.sqrt(audioData.reduce((a, v) => a + v * v, 0) / audioData.length) : 0);
+      gl.uniform1f(uni.audioLevel, isAudio ? Math.sqrt(audioData.reduce((a, v) => a + v*v, 0)/audioData.length) : 0);
       gl.uniform1f(uni.audioSensitivity, parseFloat(audioSensitivity.value));
       gl.uniform3fv(uni.color1, hexToRgbNormalized(color1Picker.value));
       gl.uniform3fv(uni.color2, hexToRgbNormalized(color2Picker.value));
@@ -272,36 +340,17 @@
     });
     document.addEventListener('keydown', (event) => {
       switch (event.key) {
-        case 'v':
-        case 'V':
-        const currentType = parseInt(visualizationType.value);
-        visualizationType.value = (currentType + 1) % 3;
-        break;
-        case 'ArrowUp':
-          adjustSlider(audioSensitivity, audioSensitivityValue, 0.1, 0, 5, 1);
+        case 'v': case 'V': {
+          visualizationType.value = (parseInt(visualizationType.value) + 1) % 4;
           break;
-        case 'ArrowDown':
-          adjustSlider(audioSensitivity, audioSensitivityValue, -0.1, 0, 5, 1);
-          break;
-        case 'ArrowRight':
-          adjustSlider(timeSpeed, timeSpeedValue, 0.1, 0, 2, 2);
-          break;
-        case 'ArrowLeft':
-          adjustSlider(timeSpeed, timeSpeedValue, -0.1, 0, 2, 2);
-          break;
-        case 's':
-        case 'S':
-          document.querySelector('.controls').classList.toggle('collapsed');
-          break;
-        case 'f':
-        case 'F':
-          if(!document.fullscreenElement) canvas.requestFullscreen();
-          else document.exitFullscreen();
-          break;
-        case 'm':
-        case 'M':
-          isAudio ? stopAudio() : initAudio();
-          break;
+        }
+        case 'ArrowUp': adjustSlider(audioSensitivity, audioSensitivityValue, 0.1, 0, 5, 1); break;
+        case 'ArrowDown': adjustSlider(audioSensitivity, audioSensitivityValue, -0.1, 0, 5, 1); break;
+        case 'ArrowRight': adjustSlider(timeSpeed, timeSpeedValue, 0.1, 0, 2, 2); break;
+        case 'ArrowLeft': adjustSlider(timeSpeed, timeSpeedValue, -0.1, 0, 2, 2); break;
+        case 'c': case 'C': document.querySelector('.controls').classList.toggle('collapsed'); break;
+        case 'f': case 'F': if (!document.fullscreenElement) canvas.requestFullscreen(); else document.exitFullscreen(); break;
+        case 'm': case 'M': isAudio ? stopAudio() : initAudio(); break;
       }
     });
   </script>
