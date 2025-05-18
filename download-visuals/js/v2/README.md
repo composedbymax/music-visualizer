@@ -1,1 +1,0 @@
-TRY at https://max.x10.mx/apps/music-visualizer/
