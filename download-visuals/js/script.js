@@ -1,83 +1,95 @@
 const canvas = document.getElementById('visualizer');
-const ctx = canvas.getContext('2d', { alpha: false });
-let audioContext, analyser, source;
-let animationId;
-let mediaRecorder;
-let chunks = [];
-let background = new Image();
-let albumArt = new Image();
-let audio = new Audio();
-let isPlaying = false;
-let isRecording = false;
-let lastDrawTime = 0;
+const ctx    = canvas.getContext('2d', { alpha: false });
+let audioContext, analyser, source, audioDest;
+let animationId, mediaRecorder;
+let recordedChunks = [];
+let background     = new Image();
+let albumArt       = new Image();
+let audio          = new Audio();
+let isPlaying      = false;
+let lastDrawTime   = 0;
 const FRAME_RATE = 1000 / 60;
-const FFT_SIZES = [64, 128, 512, 1024, 2048];
-let canvasWidth = canvas.width;
-let canvasHeight = canvas.height;
-let halfWidth = canvasWidth / 2;
-let halfHeight = canvasHeight / 2;
+const FFT_SIZES  = [64, 128, 512, 1024, 2048];
+let canvasWidth      = canvas.width;
+let canvasHeight     = canvas.height;
+let halfWidth        = canvasWidth  / 2;
+let halfHeight       = canvasHeight / 2;
 let currentVisualizerType = 'waveform';
 let waveWidth, waveHeight, barWidth, barSpacing;
 let albumSize, albumX, albumY;
-let videoBitrate = 8000000;
+let videoBitrate     = 8_000_000;
 let visualizationWidth = 5.5;
-let sensitivityFactor = 1.0;
-let xbuieowd = true;
+let sensitivityFactor  = 1.0;
+let xbuieowd           = true;
 const bgCanvas = document.createElement('canvas');
-const bgCtx = bgCanvas.getContext('2d', { alpha: false });
-const primaryColorInput = document.getElementById('primaryColor');
+const bgCtx    = bgCanvas.getContext('2d', { alpha: false });
+const primaryColorInput   = document.getElementById('primaryColor');
 const secondaryColorInput = document.getElementById('secondaryColor');
+function pickRecordingType(preferredOrder) {
+  const options = {
+    h264: ['video/mp4;codecs="avc1.42E01E, mp4a.40.2"', 'video/mp4;codecs=avc1.42E01E'],
+    vp9:  ['video/webm;codecs=vp9,opus'],
+    vp8:  ['video/webm;codecs=vp8,opus']
+  };
+  for (let codec of preferredOrder) {
+    for (let mime of (options[codec]||[])) {
+      if (MediaRecorder.isTypeSupported(mime)) {
+        return { mime, ext: codec==='h264'?'mp4':'webm', codec };
+      }
+    }
+  }
+  return { mime:'video/webm;codecs=vp8,opus', ext:'webm', codec:'vp8' };
+}
 function hexToRgb(hex) {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16)
-    } : null;
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : null;
 }
 function updateCanvasDimensions() {
-    canvasWidth = canvas.width;
-    canvasHeight = canvas.height;
-    halfWidth = canvasWidth / 2;
-    halfHeight = canvasHeight / 2;
-    waveWidth = canvasWidth * 0.4;
-    waveHeight = canvasHeight * 0.25;
-    barSpacing = 2;
-    albumSize = Math.min(canvasWidth, canvasHeight) * 0.25;
-    albumX = (canvasWidth - albumSize) / 2;
-    albumY = (canvasHeight - albumSize) / 2;
-    bgCanvas.width = canvasWidth;
-    bgCanvas.height = canvasHeight;
-    updateBackgroundBuffer();
+  canvasWidth = canvas.width;
+  canvasHeight = canvas.height;
+  halfWidth = canvasWidth / 2;
+  halfHeight = canvasHeight / 2;
+  waveWidth = canvasWidth * 0.4;
+  waveHeight = canvasHeight * 0.25;
+  barSpacing = 2;
+  albumSize = Math.min(canvasWidth, canvasHeight) * 0.25;
+  albumX = (canvasWidth - albumSize) / 2;
+  albumY = (canvasHeight - albumSize) / 2;
+  bgCanvas.width = canvasWidth;
+  bgCanvas.height = canvasHeight;
+  updateBackgroundBuffer();
 }
 function updateBackgroundBuffer() {
-    if (background.complete && background.src) {
-        bgCtx.drawImage(background, 0, 0, canvasWidth, canvasHeight);
-    } else {
-        bgCtx.fillStyle = '#000000';
-        bgCtx.fillRect(0, 0, canvasWidth, canvasHeight);
-    }
+  if (background.complete && background.src) {
+    bgCtx.drawImage(background, 0, 0, canvasWidth, canvasHeight);
+  } else {
+    bgCtx.fillStyle = '#000';
+    bgCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+  }
 }
 function drawWatermark() {
-    if (xbuieowd) {
-        ctx.save();
-        ctx.font = 'bold 24px Arial';
-        const text = 'MAX WARREN';
-        const metrics = ctx.measureText(text);
-        const padding = 8;
-        const boxWidth = metrics.width + (padding * 2);
-        const boxHeight = 30;
-        const x = canvasWidth - boxWidth - 20;
-        const y = canvasHeight - 20;
-        ctx.fillStyle = 'white';
-        ctx.shadowBlur = 4;
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-        ctx.fillRect(x, y - boxHeight + 6, boxWidth, boxHeight);
-        ctx.fillStyle = 'black';
-        ctx.shadowBlur = 0;
-        ctx.fillText(text, x + padding, y);
-        ctx.restore();
-    }
+  if (!xbuieowd) return;
+  ctx.save();
+  ctx.font = 'bold 24px Arial';
+  const text = 'MAX WARREN';
+  const metrics = ctx.measureText(text);
+  const padding = 8;
+  const boxWidth = metrics.width + padding*2;
+  const boxHeight = 30;
+  const x = canvasWidth - boxWidth - 20;
+  const y = canvasHeight - 20;
+  ctx.fillStyle = '#fff';
+  ctx.shadowBlur = 4;
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(x, y-boxHeight+6, boxWidth, boxHeight);
+  ctx.fillStyle = '#000';
+  ctx.shadowBlur = 0;
+  ctx.fillText(text, x+padding, y);
+  ctx.restore();
 }
 function drawWaveformVisualization(dataArray, bufferLength) {
     const primaryColor = hexToRgb(secondaryColorInput.value);
@@ -167,76 +179,6 @@ function drawSpectrogramVisualization(dataArray, bufferLength) {
         ctx.fillRect(offset, 0, barWidth - 2, height);
     }
 }
-function drawDNAHelixVisualization(dataArray, bufferLength) {
-    const primaryColor = hexToRgb(primaryColorInput.value);
-    const secondaryColor = hexToRgb(secondaryColorInput.value);
-    const centerX = canvasWidth / 2;
-    const centerY = canvasHeight / 2;
-    const helixWidth = canvasWidth * 0.4;
-    const helixHeight = canvasHeight * 0.8;
-    const coils = visualizationWidth * 3;
-    for (let i = 0; i < bufferLength; i += 4) {
-        const value = dataArray[i];
-        const t = i / bufferLength;
-        const angle = t * Math.PI * 2 * coils;
-        const x1 = centerX + Math.cos(angle) * helixWidth / 2;
-        const y1 = centerY + t * helixHeight - helixHeight / 2;
-        const x2 = centerX - Math.cos(angle) * helixWidth / 2;
-        const y2 = centerY + t * helixHeight - helixHeight / 2;
-        const radius1 = (value / 255) * 10;
-        const radius2 = (dataArray[Math.min(i + 2, bufferLength - 1)] / 255) * 10;
-        ctx.beginPath();
-        ctx.arc(x1, y1, radius1, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${primaryColor.r}, ${primaryColor.g}, ${primaryColor.b}, 0.7)`;
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(x2, y2, radius2, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${secondaryColor.r}, ${secondaryColor.g}, ${secondaryColor.b}, 0.7)`;
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.strokeStyle = `rgba(255, 255, 255, 0.2)`;
-        ctx.lineWidth = 1;
-        ctx.stroke();
-    }
-}
-function drawKaleidoscopeVisualization(dataArray, bufferLength) {
-    const primaryColor = hexToRgb(primaryColorInput.value);
-    const secondaryColor = hexToRgb(secondaryColorInput.value);
-    const centerX = canvasWidth / 2;
-    const centerY = canvasHeight / 2;
-    const segments = visualizationWidth;
-    const angleStep = (Math.PI * 2) / segments;
-    const maxRadius = Math.min(canvasWidth, canvasHeight) / 3;
-    for (let i = 0; i < bufferLength; i += 4) {
-        const value = dataArray[i];
-        const radius = (value / 255) * maxRadius;
-        const distortion = Math.sin(i / 20) * 10;
-        for (let segment = 0; segment < segments; segment++) {
-            const angle = segment * angleStep + Math.sin(i / 50) * 0.2;
-            const x = centerX + Math.cos(angle) * radius + distortion;
-            const y = centerY + Math.sin(angle) * radius + distortion;
-            ctx.beginPath();
-            ctx.moveTo(centerX, centerY);
-            ctx.lineTo(x, y);
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = `rgba(${primaryColor.r}, ${primaryColor.g}, ${primaryColor.b}, 0.8)`;
-            ctx.stroke();
-            ctx.beginPath();
-            const circleRadius = Math.max(2, value / 15);
-            ctx.arc(x, y, circleRadius, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(${secondaryColor.r}, ${secondaryColor.g}, ${secondaryColor.b}, 0.5)`;
-            ctx.fill();
-        }
-    }
-    const pulseRadius = Math.sin(Date.now() / 1000) * 30 + 60;
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, pulseRadius, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(${primaryColor.r}, ${primaryColor.g}, ${primaryColor.b}, 0.1)`;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-}
 function drawMatrixVisualization(dataArray, bufferLength) {
     const primaryColor = hexToRgb(primaryColorInput.value);
     const secondaryColor = hexToRgb(secondaryColorInput.value);
@@ -260,71 +202,6 @@ function drawMatrixVisualization(dataArray, bufferLength) {
                 size
             );
         }
-    }
-}
-function drawHexGridVisualization(dataArray, bufferLength) {
-    const primaryColor = hexToRgb(primaryColorInput.value);
-    const secondaryColor = hexToRgb(secondaryColorInput.value);
-    const hexSize = Math.max(10, visualizationWidth * 5);
-    const hexWidth = Math.sqrt(3) * hexSize;
-    const hexHeight = 2 * hexSize;
-    const cols = Math.ceil(canvasWidth / hexWidth);
-    const rows = Math.ceil(canvasHeight / (hexHeight * 0.75));
-    for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-            const x = col * hexWidth + (row % 2) * (hexWidth / 2);
-            const y = row * hexHeight * 0.75;
-            const dataIndex = (row * cols + col) % bufferLength;
-            const value = dataArray[dataIndex] / 255;
-            const r = primaryColor.r + (secondaryColor.r - primaryColor.r) * value;
-            const g = primaryColor.g + (secondaryColor.g - primaryColor.g) * value;
-            const b = primaryColor.b + (secondaryColor.b - primaryColor.b) * value;
-            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${value})`;
-            ctx.beginPath();
-            for (let i = 0; i < 6; i++) {
-                const angle = (Math.PI / 3) * i;
-                const px = x + Math.cos(angle) * hexSize;
-                const py = y + Math.sin(angle) * hexSize;
-                if (i === 0) {
-                    ctx.moveTo(px, py);
-                } else {
-                    ctx.lineTo(px, py);
-                }
-            }
-            ctx.closePath();
-            ctx.fill();
-        }
-    }
-}
-function drawNeuroNetworkVisualization(dataArray, bufferLength) {
-    const primaryColor = hexToRgb(primaryColorInput.value);
-    const secondaryColor = hexToRgb(secondaryColorInput.value);
-    const nodes = Math.floor(visualizationWidth * 15);
-    const connections = nodes * 2;
-    for (let i = 0; i < nodes; i++) {
-        const dataIndex = Math.floor((i / nodes) * bufferLength);
-        const value = dataArray[dataIndex];
-        const x = (Math.sin(i) * canvasWidth / 2) + canvasWidth / 2;
-        const y = (Math.cos(i) * canvasHeight / 2) + canvasHeight / 2;
-        const nodeSize = (value / 255) * 20;
-        ctx.beginPath();
-        ctx.arc(x, y, Math.max(2, nodeSize), 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${primaryColor.r}, ${primaryColor.g}, ${primaryColor.b}, 0.6)`;
-        ctx.fill();
-    }
-    for (let i = 0; i < connections; i++) {
-        const start = Math.floor(Math.random() * nodes);
-        const end = Math.floor(Math.random() * nodes);
-        const startX = (Math.sin(start) * canvasWidth / 2) + canvasWidth / 2;
-        const startY = (Math.cos(start) * canvasHeight / 2) + canvasHeight / 2;
-        const endX = (Math.sin(end) * canvasWidth / 2) + canvasWidth / 2;
-        const endY = (Math.cos(end) * canvasHeight / 2) + canvasHeight / 2;
-        ctx.beginPath();
-        ctx.moveTo(startX, startY);
-        ctx.lineTo(endX, endY);
-        ctx.strokeStyle = `rgba(${secondaryColor.r}, ${secondaryColor.g}, ${secondaryColor.b}, 0.2)`;
-        ctx.lineWidth = 1;
-        ctx.stroke();
     }
 }
 function drawMandalaVisualization(dataArray, bufferLength) {
@@ -437,6 +314,38 @@ function drawPulseRingsVisualization(dataArray, bufferLength) {
     }
 }
 function draw(timestamp) {
+  if (timestamp - lastDrawTime < FRAME_RATE) {
+    animationId = requestAnimationFrame(draw);
+    return;
+  }
+  lastDrawTime = timestamp;
+  const bufferLength = analyser.frequencyBinCount;
+  const dataArray = new Uint8Array(bufferLength);
+  analyser.getByteFrequencyData(dataArray);
+  const adjusted = new Uint8Array(bufferLength);
+  for (let i=0; i<bufferLength; i++) {
+    adjusted[i] = Math.min(255, dataArray[i]*sensitivityFactor);
+  }
+  ctx.drawImage(bgCanvas, 0, 0);
+  switch (currentVisualizerType) {
+    case 'waveform':drawWaveformVisualization(adjustedDataArray, bufferLength);break;
+    case 'circular':drawCircularVisualization(adjustedDataArray, bufferLength);break;
+    case 'spectrogram':drawSpectrogramVisualization(adjustedDataArray, bufferLength);break;
+    case 'matrix':drawMatrixVisualization(adjustedDataArray, bufferLength);break;
+    case 'mandala':drawMandalaVisualization(adjustedDataArray, bufferLength);break;
+    case 'galaxy':drawGalaxyVisualization(adjustedDataArray, bufferLength);break;
+    case 'crystal':drawCrystalVisualization(adjustedDataArray, bufferLength);break;
+    case 'pulseRings':drawPulseRingsVisualization(adjustedDataArray, bufferLength);break;
+  }
+  if (albumArt.complete && albumArt.src) {
+    ctx.drawImage(albumArt, albumX, albumY, albumSize, albumSize);
+  }
+  drawWatermark();
+  if (isPlaying) {
+    animationId = requestAnimationFrame(draw);
+  }
+}
+function draw(timestamp) {
     if (timestamp - lastDrawTime < FRAME_RATE) {
         animationId = requestAnimationFrame(draw);
         return;
@@ -454,11 +363,7 @@ function draw(timestamp) {
         case 'waveform':drawWaveformVisualization(adjustedDataArray, bufferLength);break;
         case 'circular':drawCircularVisualization(adjustedDataArray, bufferLength);break;
         case 'spectrogram':drawSpectrogramVisualization(adjustedDataArray, bufferLength);break;
-        case 'dna':drawDNAHelixVisualization(adjustedDataArray, bufferLength);break;
-        case 'kaleidoscope':drawKaleidoscopeVisualization(adjustedDataArray, bufferLength);break;
         case 'matrix':drawMatrixVisualization(adjustedDataArray, bufferLength);break;
-        case 'honeycomb':drawHexGridVisualization(adjustedDataArray, bufferLength);break;
-        case 'neuroNetwork':drawNeuroNetworkVisualization(adjustedDataArray, bufferLength);break;
         case 'mandala':drawMandalaVisualization(adjustedDataArray, bufferLength);break;
         case 'galaxy':drawGalaxyVisualization(adjustedDataArray, bufferLength);break;
         case 'crystal':drawCrystalVisualization(adjustedDataArray, bufferLength);break;
@@ -565,31 +470,19 @@ secondaryColorInput.addEventListener('change', () => {
         draw();
     }
 });
-async function setupAudioContext(audioElement) {
-    if (!audioContext) {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        analyser = audioContext.createAnalyser();
-        const fftControl = document.getElementById('fftControl');
-        analyser.fftSize = FFT_SIZES[parseInt(fftControl.value)];
-    }
-    if (source) {
-        source.disconnect();
-    }
-    source = audioContext.createMediaElementSource(audioElement);
-    source.connect(analyser);
-    analyser.connect(audioContext.destination);
+async function setupAudioContext(audioEl) {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser     = audioContext.createAnalyser();
+    analyser.fftSize = FFT_SIZES[parseInt(document.getElementById('fftControl').value)];
+    audioDest    = audioContext.createMediaStreamDestination();
+  }
+  if (source) source.disconnect();
+  source = audioContext.createMediaElementSource(audioEl);
+  source.connect(analyser);
+  analyser.connect(audioContext.destination);
+  analyser.connect(audioDest);
 }
-document.getElementById('fftControl').addEventListener('input', (e) => {
-    const fftSize = FFT_SIZES[parseInt(e.target.value)];
-    document.getElementById('fftValue').textContent = fftSize;
-    if (analyser) {
-        analyser.fftSize = fftSize;
-    }
-    if (isPlaying) {
-        cancelAnimationFrame(animationId);
-        draw();
-    }
-});
 document.getElementById('playButton').addEventListener('click', () => {
     if (audioContext.state === 'suspended') {
         audioContext.resume();
@@ -620,49 +513,66 @@ document.getElementById('sensitivityControl').addEventListener('input', (e) => {
     sensitivityFactor = parseFloat(e.target.value);
     document.getElementById('sensitivityValue').textContent = sensitivityFactor.toFixed(1);
 });
-document.getElementById('startRecording').addEventListener('click', async () => {
-    chunks = [];
-    const stream = canvas.captureStream();
-    const audioStream = audio.captureStream();
-    const tracks = [...stream.getTracks(), ...audioStream.getTracks()];
-    const combinedStream = new MediaStream(tracks);
-    mediaRecorder = new MediaRecorder(combinedStream, {
-        mimeType: 'video/webm;codecs=vp8,opus',
-        videoBitsPerSecond: videoBitrate
-    });
-    mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-            chunks.push(e.data);
-        }
-    };
-    mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'visualization.webm';
-        a.click();
-        URL.revokeObjectURL(url);
-    };
-    mediaRecorder.start();
-    isRecording = true;
-    document.getElementById('startRecording').disabled = true;
-    document.getElementById('stopRecording').disabled = false;
+document.getElementById('fftControl').addEventListener('input', (e) => {
+    const fftSize = FFT_SIZES[parseInt(e.target.value)];
+    document.getElementById('fftValue').textContent = fftSize;
+    if (analyser) {
+        analyser.fftSize = fftSize;
+    }
+    if (isPlaying) {
+        cancelAnimationFrame(animationId);
+        draw();
+    }
 });
-document.getElementById('stopRecording').addEventListener('click', () => {
+const startRec = document.getElementById('startRecording');
+const stopRec  = document.getElementById('stopRecording');
+const bitrateControl = document.getElementById('bitrateControl');
+startRec.addEventListener('click', () => {
+  recordedChunks = [];
+  const canvasStream = canvas.captureStream();
+  const audioStream  = audioDest.stream;
+  const combined     = new MediaStream([
+    ...canvasStream.getTracks(),
+    ...audioStream.getTracks()
+  ]);
+  const { mime, ext, codec } = pickRecordingType(['h264','vp9','vp8']);
+  mediaRecorder = new MediaRecorder(combined, {
+    mimeType: mime,
+    videoBitsPerSecond: parseInt(bitrateControl.value) * 1_000_000
+  });
+  mediaRecorder.ondataavailable = e => {
+    if (e.data.size) recordedChunks.push(e.data);
+  };
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(recordedChunks, { type: mime });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `visualization.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+  mediaRecorder.start(1000);
+  startRec.disabled = true;
+  stopRec.disabled  = false;
+});
+stopRec.addEventListener('click', () => {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
     mediaRecorder.stop();
-    isRecording = false;
-    document.getElementById('startRecording').disabled = false;
-    document.getElementById('stopRecording').disabled = true;
+    startRec.disabled = false;
+    stopRec.disabled  = true;
+  }
 });
-background.onload = function () {
-    canvas.width = background.width || 1200;
-    canvas.height = background.height || 600;
-    updateCanvasDimensions();
-    const dimensionsInfo = document.getElementById('dimensionsInfo');
-    dimensionsInfo.textContent = `Canvas dimensions: ${canvas.width}x${canvas.height}px`;
-    dimensionsInfo.classList.add('active');
+background.onload = () => {
+  canvas.width  = background.width  || 1200;
+  canvas.height = background.height || 600;
+  updateCanvasDimensions();
+  document.getElementById('dimensionsInfo').textContent =
+    `Canvas dimensions: ${canvas.width}×${canvas.height}px`;
+  document.getElementById('dimensionsInfo').classList.add('active');
 };
-canvas.width = 1200;
+canvas.width  = 1200;
 canvas.height = 600;
 updateCanvasDimensions();
