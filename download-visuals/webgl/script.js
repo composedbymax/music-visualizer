@@ -245,15 +245,15 @@ const previewVideo = document.getElementById("previewVideo");
 const downloadBtn = document.getElementById("downloadRecording");
 const closePreviewBtn = document.getElementById("closePreview");
 startBtn.addEventListener("click", async () => {
-  if (!audioCtx) {
-    audioCtx = new AudioContext();
-    dest = audioCtx.createMediaStreamDestination();
-  }
-  if (audioCtx.state === "suspended") {
-    await audioCtx.resume();
-  }
   chunks = [];
   if (audioBuffer) {
+    if (!audioCtx) {
+      audioCtx = new AudioContext();
+      dest = audioCtx.createMediaStreamDestination();
+    }
+    if (audioCtx.state === "suspended") {
+      await audioCtx.resume();
+    }
     if (sourceNode) {
       try { sourceNode.stop(); } catch (e) {}
     }
@@ -270,12 +270,18 @@ startBtn.addEventListener("click", async () => {
     sourceNode.start(0);
   }
   const canvasStream = canvas.captureStream(60);
-  const audioStream = dest.stream;
-  const tracks = [...canvasStream.getTracks(), ...audioStream.getTracks()];
-  const combinedStream = new MediaStream(tracks);
+  let combinedStream;
+  if (audioBuffer && dest) {
+    const audioStream = dest.stream;
+    const tracks = [...canvasStream.getTracks(), ...audioStream.getTracks()];
+    combinedStream = new MediaStream(tracks);
+  } else {
+    combinedStream = canvasStream;
+  }
   const selectedQuality = qualitySettings[qualitySelect.value];
+  const mimeType = audioBuffer ? "video/webm;codecs=vp9,opus" : "video/webm;codecs=vp9";
   mediaRecorder = new MediaRecorder(combinedStream, {
-    mimeType: "video/webm;codecs=vp9,opus",
+    mimeType: mimeType,
     ...selectedQuality
   });
   mediaRecorder.ondataavailable = (e) => {
