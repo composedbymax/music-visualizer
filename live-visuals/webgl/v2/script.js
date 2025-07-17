@@ -1,3 +1,4 @@
+(async () => {
 function hexToRgbNormalized(hex) {
     const r = parseInt(hex.substr(1,2),16)/255;
     const g = parseInt(hex.substr(3,2),16)/255;
@@ -187,3 +188,4 @@ document.addEventListener('keydown', (event) => {
     case 'm': case 'M': isAudio ? stopAudio() : initAudio(); break;
     }
 });
+})();
